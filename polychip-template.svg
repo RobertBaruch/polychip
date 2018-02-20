@@ -26,6 +26,34 @@
        orient="auto"
        refY="0.0"
        refX="0.0"
+       id="marker1617"
+       style="overflow:visible;"
+       inkscape:isstock="true">
+      <path
+         id="path1615"
+         d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
+         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
+         transform="scale(0.4) rotate(180) translate(10,0)" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Mend"
+       orient="auto"
+       refY="0.0"
+       refX="0.0"
+       id="marker1611"
+       style="overflow:visible;"
+       inkscape:isstock="true">
+      <path
+         id="path1609"
+         d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
+         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
+         transform="scale(0.4) rotate(180) translate(10,0)" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Mend"
+       orient="auto"
+       refY="0.0"
+       refX="0.0"
        id="marker1543"
        style="overflow:visible;"
        inkscape:isstock="true">
@@ -969,5 +997,33 @@
          x="11517.757"
          y="-2568.2534"
          id="tspan1593">('SIGNAL2', {'q_Q2_g', 'q_Q4_g', 'q_Q1_e0'})]</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.33333397px;line-height:125%;font-family:'DejaVu Sans Mono';-inkscape-font-specification:'DejaVu Sans Mono, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       x="11716.76"
+       y="-3478.1204"
+       id="text1601"><tspan
+         sodipodi:role="line"
+         id="tspan1599"
+         x="11716.76"
+         y="-3478.1204">These must be</tspan><tspan
+         sodipodi:role="line"
+         x="11716.76"
+         y="-3451.4536"
+         id="tspan1603">separate diff</tspan><tspan
+         sodipodi:role="line"
+         x="11716.76"
+         y="-3424.7871"
+         id="tspan1605">polygons!</tspan></text>
+    <path
+       style="opacity:1;vector-effect:none;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:3.77952766;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;marker-end:url(#marker1611)"
+       d="m 11770.499,-3410.2382 74.954,111.7228"
+       id="path1607"
+       inkscape:connector-curvature="0" />
+    <path
+       style="opacity:1;vector-effect:none;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:3.77952766;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;marker-end:url(#marker1617)"
+       d="m 11842.624,-3434.2799 63.64,1.4143 5.657,125.865"
+       id="path1613"
+       inkscape:connector-curvature="0" />
   </g>
 </svg>
