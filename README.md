@@ -1,5 +1,5 @@
 # polychip
-Python app to extract a netlist of NMOS transistors from an Inkscape diagram.
+Python program to extract a netlist of NMOS transistors from an Inkscape diagram.
 
 ## Instructions
 The Python 3 app is dependent on [`svg.path`](https://pypi.python.org/pypi/svg.path), [`networkx`](https://networkx.github.io/) 2.2, and [`shapely`](https://shapely.readthedocs.io/en/latest/index.html). These can be installed via:
