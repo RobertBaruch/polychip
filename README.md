@@ -4,6 +4,7 @@ Python program to extract a netlist of NMOS transistors from an Inkscape diagram
 ## Note!
 The program currently does not handle svg paths according to the standard. This is being worked on.
 
+## Instructions
 Open the `polychip-template.svg` file in Inkscape. Instructions on how to organize your drawing is in that file.
 
 The Python 3 app is dependent on [`matplotlib`](https://matplotlib.org/) and [`networkx`](https://networkx.github.io/). These can be installed via pip.
