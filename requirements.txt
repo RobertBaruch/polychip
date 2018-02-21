@@ -1,0 +1,4 @@
+networkx==2.1
+Shapely==1.6.4.post1
+matplotlib==2.1.2
+svg.path==2.2
