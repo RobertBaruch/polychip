@@ -95,6 +95,11 @@ def file_to_netlist(file):
         ends = []
         endpoints = [shapely.geometry.Point(q['path'].coords[0]),
                      shapely.geometry.Point(q['path'].coords[1])]
+        # Sort endpoints to get a consistent electrode 0 and 1.
+        if (endpoints[0].x > endpoints[1].x or 
+            endpoints[0].x == endpoints[1].x and endpoints[0].y > endpoints[1].y):
+            endpoints[0], endpoints[1] = endpoints[1], endpoints[0]
+            
         for did, d in diff_paths.items():
             if d['path'].contains(endpoints[0]) or d['path'].contains(endpoints[1]):
                 ends.append(did)
