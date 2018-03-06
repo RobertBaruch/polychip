@@ -1,168 +1,266 @@
 import argparse
 import re
 import networkx as nx
+import shapely.ops
+import functools
+from enum import Enum, unique
 from svg_parse import *
-from layers import *
+from layers import InkscapeFile
+from layers import coerce_multipoly
+
 
 # Text must be Djvu Sans Mono
 # On gates, text must be on the QNames layer and must overlap the gate line.
 # On polygons, text must be on the SNames layer and must intersect one and only one polygon.
 
-def layer_path(name):
-    return "./svg:g[@inkscape:groupmode='layer'][@inkscape:label='" + name + "']"
+class Contact(object):
+    """Represents a contact between polygons on two different layers.
+
+    Args:
+        loc (shapely.geometry.Point): The midpoint of the contact.
+
+    Attributes:
+        metal (int): If not None, the index into the InkscapeFile's metal_array
+            this contact connects.    
+        poly (int): If not None, the index into the InkscapeFile's poly_array
+            this contact connects.    
+        diff (int): If not None, the index into the InkscapeFile's diff_array
+            this contact connects.    
+    """
+    def __init__(self, loc):
+        self.metal = None
+        self.poly = None
+        self.diff = None
+        self.loc = loc
 
 
-doc_height = 0;
+class Transistor(object):
+    """Represents a transistor.
+
+    For consistency, the electrode0 must alway have lower x (or lower y if x is equal) than
+    electrode1 (see InkscapeFile.poly_cmp for details of this comparison).
+
+    Args:
+    Attributes:
+        gate_shape (shapely.geometry.Polygon): The polygon outlining the transistor's gate. 
+        gate (int): The index into the InkscapeFile's poly_array that connects to this transistor's gate.
+        electrode0 (int): The index into the InkscapeFile's diff_array that connects to one
+            side of this transistor.
+        electrode1 (int): The index into the InkscapeFile's diff_array that connects to the other
+            side of this transistor.
+        name (str): The name of the transistor, if found on the QNames layer, otherwise None.
+    """
+    def __init__(self, gate_shape, gate, electrode0, electrode1, name):
+        self.gate_shape = gate_shape
+        self.gate = gate
+        self.electrode0 = electrode0
+        self.electrode1 = electrode1
+        self.name = name
+        self.centroid = self.gate_shape.centroid
+
+    def __repr__(self):
+        return "{:s} @ {:f}, {:f}".format(self.name, self.centroid.x, self.centroid.y)
 
 
-def calculate_contacts(contacts, metal_paths, diff_paths, poly_paths):
-    for cid, c in contacts.items():
-        metal = None
-        diff = None
-        poly = None
-        for pid, p in metal_paths.items():
-            if p['path'].contains(c['loc']):
-                metal = pid
-                break
-        for pid, p in diff_paths.items():
-            if p['path'].contains(c['loc']):
-                diff = pid
-                break
-        for pid, p in poly_paths.items():
-            if p['path'].contains(c['loc']):
-                poly = pid
-                break
-        if metal is not None and diff is not None and poly is not None:
-            metal = None
-        if metal is not None:
-            c['metal'] = metal
-            if diff is not None:
-                metal_paths[metal]['conn'].append(diff)
-            elif poly is not None:
-                metal_paths[metal]['conn'].append(poly)
-        if diff is not None:
-            c['diff'] = diff
-            if metal is not None:
-                diff_paths[diff]['conn'].append(metal)
-            elif poly is not None:
-                diff_paths[diff]['conn'].append(poly)
-        if poly is not None:
-            c['poly'] = poly
-            if metal is not None:
-                poly_paths[poly]['conn'].append(metal)
-            elif diff is not None:
-                poly_paths[poly]['conn'].append(diff)
+@unique
+class Type(Enum):
+    """ Types of entities."""
+    METAL = 1
+    POLY = 2
+    DIFF = 3
+    GATE = 4
+    E0 = 5
+    E1 = 6
+
+    def __repr__(self):
+        return "Type." + str(self.name)
 
 
-def find_bad_contacts(contacts):
-    for cid, c in contacts.items():
-        if 'metal' not in c and 'diff' not in c and 'poly' not in c:
-            print("Error: Contact {:s} at {:s} has no connection".format(cid,
-                                                                         str(to_inkscape_coords(c['loc'], doc_height))))
-        elif 'metal' in c and 'diff' not in c and 'poly' not in c:
-            print("Error: Metal contact {:s} at {:s} has no second connection".format(cid,
-                                                                                      str(to_inkscape_coords(c['loc'], doc_height))))
-        elif 'diff' in c and 'metal' not in c and 'poly' not in c:
-            print("Error: Diff contact {:s} at {:s} has no second connection".format(cid,
-                                                                                     str(to_inkscape_coords(c['loc'], doc_height))))
-        elif 'poly' in c and 'diff' not in c and 'metal' not in c:
-            print("Error: Poly contact {:s} at {:s} has no second connection".format(cid,
-                                                                                     str(to_inkscape_coords(c['loc'], doc_height))))
+def calculate_contacts(drawing):
+    """Returns an array of Contacts.
+
+    Contacts are determine only after transistors are found.
+    """
+    cs = []
+    for c in drawing.contacts.geoms:
+        contact = Contact(c)
+        contact.metal = next( (i for i, p in enumerate(drawing.metal_array) if p.contains(c)), None)
+        contact.diff = next( (i for i, p in enumerate(drawing.diff_array) if p.contains(c)), None)
+        contact.poly = next( (i for i, p in enumerate(drawing.poly_array) if p.contains(c)), None)
+        if contact.metal is not None and contact.diff is not None and contact.poly is not None:
+            contact.metal = None
+        count = 0
+        contacted = "Isolated"
+        if contact.metal is not None:
+            count += 1
+            contacted = "Metal"
+        if contact.diff is not None:
+            count += 1
+            contacted = "Diff"
+        if contact.poly is not None:
+            count += 1
+            contacted = "Poly"
+        if count != 2:
+            print("Warning: {:s} contact at {:s} has no connection".format(
+                contacted, str(c)))
+        else:
+            cs.append(contact)
+    print("{:d} valid contacts".format(len(cs)))
+    return cs
 
 
-def find_bad_paths(metal_paths, diff_paths, poly_paths):
-    for pid, p in metal_paths.items():
-        if len(p['conn']) == 0:
-            print("Error: metal {:s} is isolated".format(pid))
-    for pid, p in diff_paths.items():
-        if len(p['conn']) == 0:
-            print("Error: diff {:s} is isolated".format(pid))
-    for pid, p in poly_paths.items():
-        if len(p['conn']) == 0:
-            print("Error: poly {:s} is isolated".format(pid))
+def any_contact_in_polygon(contacts, polygon):
+    """Determines if a polygon contains any contacts.
+
+    Args:
+        contacts (shapely.geometry.MultiPoint): All the contacts to check against.
+        polygon (shapely.geometry.Polygon): The polygon to check.
+
+    Returns:
+        bool: True if at least one contact's midpoint is inside the polygon, False otherwise.
+    """
+    return polygon.contains(contacts)
+
+
+def find_transistors_and_number_diffs(drawing):
+    """Finds transistors and divides diffs at transistor gates.
+
+    The gate of a transistor is defined where poly splits diff without a contact. Diffs 
+    at gates are thus split in two.
+    
+    Args:
+        drawing (InkscapeFile): The InkscapeFile object.
+
+    Returns:
+        [Transistor]: The array of transistors found.
+    """
+    new_diff_paths = {}
+
+    print("All diffs: {:d}".format(len(drawing.diff_array)))
+    print("All polys: {:d}".format(len(drawing.poly_array)))
+
+    # Divide all diffs by all polys
+    difference = coerce_multipoly(drawing.multidiff.difference(drawing.multipoly))
+    print("Difference diffs: {:d}".format(len(difference)))
+
+    intersections = coerce_multipoly(drawing.multidiff.intersection(drawing.multipoly))
+    print("Intersection diffs: {:d}".format(len(intersections)))
+
+    contacted_intersections_array = []
+    gates_array = []
+    for intersection in intersections.geoms:
+        if intersection.intersects(drawing.contacts):
+            contacted_intersections_array.append(intersection)
+        else:
+            gates_array.append(intersection)
+
+    contacted_intersections = shapely.geometry.MultiPolygon(contacted_intersections_array)
+    print("Contacted intersections: {:d}".format(len(contacted_intersections)))
+    print("Gates: {:d}".format(len(gates_array)))
+
+    nongate_diffs = coerce_multipoly(shapely.ops.unary_union([difference, contacted_intersections]))
+    drawing.replace_diff_array(list(nongate_diffs.geoms))
+    print("nongate_diffs: {:d}".format(len(drawing.diff_array)))
+
+    qs = []
+    for gate in gates_array:
+        electrodes = [i for i, nongate in enumerate(drawing.diff_array) if gate.touches(nongate)]
+        if len(electrodes) != 2:
+            print("Error: transistor gate at {:s} doesn't appear to have two electrodes.".format(
+                str(gate.centroid)))
+            continue
+        g = next( (i for i, poly in enumerate(drawing.poly_array) if gate.intersects(poly)), None)
+        if g is None:
+            print("Error: transistor gate doesn't intersect any poly, which should never happen.")
+        if electrodes[0] > electrodes[1]:
+            electrodes[0], electrodes[1] = electrodes[1], electrodes[0]
+
+        q = Transistor(gate, g, electrodes[0], electrodes[1], str(len(qs)))
+        qs.append(q)
+
+    print("Located {:d} transistors".format(len(qs)))
+    return qs
 
 
 def file_to_netlist(file):
     root = parse_inkscape_svg(file)
+    drawing = InkscapeFile(root)
 
-    doc_height = float(root.get('height'))
-    contacts, poly_paths, diff_paths, metal_paths, qnames, transistors = parse_layers(root)
+    qs = find_transistors_and_number_diffs(drawing)
+    cs = calculate_contacts(drawing)
 
-    calculate_contacts(contacts, metal_paths, diff_paths, poly_paths)
-    find_bad_contacts(contacts)
+    sigs = {Type.DIFF: [None] * len(drawing.diff_array),
+            Type.POLY: [None] * len(drawing.poly_array),
+            Type.METAL: [None] * len(drawing.metal_array)}
+    for sname in drawing.snames:
+        spoint = sname.center
+        index = next( (i for i, p in enumerate(drawing.metal_array) if p.contains(spoint)), None)
+        if index is not None:
+            sigs[Type.METAL][index] = sname.text
+            print("Attached signal '{:s}' to {:s}".format(sname.text, str((Type.METAL, index))))
+            continue
 
-    for qid, q in transistors.items():
-        ends = []
-        endpoints = [shapely.geometry.Point(q['path'].coords[0]),
-                     shapely.geometry.Point(q['path'].coords[1])]
-        # Sort endpoints to get a consistent electrode 0 and 1.
-        if (endpoints[0].x > endpoints[1].x or 
-            endpoints[0].x == endpoints[1].x and endpoints[0].y > endpoints[1].y):
-            endpoints[0], endpoints[1] = endpoints[1], endpoints[0]
-            
-        for did, d in diff_paths.items():
-            if d['path'].contains(endpoints[0]) or d['path'].contains(endpoints[1]):
-                ends.append(did)
-        if len(ends) == 0:
-            print("Error: Transistor {:s} has no electrode connections".format(qid))
-        elif len(ends) == 1:
-            print("Error: Transistor {:s} has only one electrode connection".format(qid))
-        poly = None
-        for pid, p in poly_paths.items():
-            if q['path'].intersects(p['path']):
-                poly = pid
-                break
-        if poly is None:
-            print("Error: Transistor {:s} has no gate".format(qid))
-        q['gate'] = pid
-        if poly is not None:
-            poly_paths[poly]['conn'].append(qid + '_g')
-        q['electrodes'] = ends
-        for i, e in enumerate(ends):
-            diff_paths[e]['conn'].append("{:s}_e{:d}".format(qid, i))
+        index = next( (i for i, p in enumerate(drawing.poly_array) if p.contains(spoint)), None)
+        if index is not None:
+            sigs[Type.POLY][index] = sname.text
+            print("Attached signal '{:s}' to {:s}".format(sname.text, str((Type.POLY, index))))
+            continue
 
-    find_bad_paths(metal_paths, diff_paths, poly_paths)
+        index = next( (i for i, p in enumerate(drawing.diff_array) if p.contains(spoint)), None)
+        if index is not None:
+            sigs[Type.DIFF][index] = sname.text
+            print("Attached signal '{:s}' to {:s}".format(sname.text, str((Type.DIFF, index))))
+            continue
+
+        print("Warning: label '{:s}' at {:s} not attached to anything".format(
+            sname.text, str(spoint)))
+
+    for qname in drawing.qnames:
+        index = next( (i for i, q in enumerate(qs) if q.gate_shape.intersects(qname.extents)), None)
+        if index is not None:
+            qs[index].name = qname.text
+            print("Assigned transistor name " + qname.text)
+        else:
+            print("Error: transistor name {:s} at {:s} doesn't intersect a gate.".format(
+                qname.text, str(qname.extents.coords[0])))
 
     G = nx.Graph()
-    for paths in [poly_paths, metal_paths, diff_paths]:
-        for pid, p in paths.items():
-            G.add_node(pid, path=p)
-            for c in p['conn']:
-                G.add_edge(pid, c)
-    for qid, q in transistors.items():
-        if q['gate'] is not None:
-            gid = qid + '_g'
-            G.add_node(gid)
-            G.add_edge(gid, q['gate'])
-        for i, e in enumerate(q['electrodes']):
-            eid = "{:s}_e{:d}".format(qid, i)
-            G.add_node(eid)
-            G.add_edge(eid, e)
-
-    # Stamp every node in a connected component with any node's label
-    for cc in nx.connected_components(G):
-        signal_name = None
-        for c in cc:
-            node = G.nodes[c]
-            if 'path' in node and 'label' in node['path']:
-                signal_name = node['path']['label']
-                if signal_name is not None:
-                    break
-        if signal_name is not None:
-            for c in cc:
-                G.nodes[c]['signal'] = signal_name
+    for i in range(len(drawing.metal_array)):
+        G.add_node((Type.METAL, i))
+    for i in range(len(drawing.diff_array)):
+        G.add_node((Type.DIFF, i))
+    for i in range(len(drawing.poly_array)):
+        G.add_node((Type.POLY, i))
+    for c in cs:
+        if c.poly is None:
+            G.add_edge((Type.METAL, c.metal), (Type.DIFF, c.diff))
+        elif c.metal is None:
+            G.add_edge((Type.POLY, c.poly), (Type.DIFF, c.diff))
+        else:
+            G.add_edge((Type.METAL, c.metal), (Type.POLY, c.poly))
+    for i, q in enumerate(qs):
+        G.add_edge((Type.GATE, q.name), (Type.POLY, q.gate))
+        G.add_edge((Type.E0, q.name), (Type.DIFF, q.electrode0))
+        G.add_edge((Type.E1, q.name), (Type.DIFF, q.electrode1))
 
     nets = []
     for cc in nx.connected_components(G):
-        net = {x for x in cc if x.startswith('q_')}
-        if len(net) > 0:
-            signal_name = None
-            node = G.nodes[next(iter(net))]
-            if 'signal' in node:
-                signal_name = node['signal']
-            nets.append((signal_name, net))
+        net = {x for x in cc}
+        netname = None
+        for c in net:
+            if c[0] in sigs and sigs[c[0]][c[1]] is not None:
+                if netname is not None and netname != sigs[c[0]][c[1]]:
+                    print("Warning: component {:s} is named '{:s}' but is connected to '{:s}'".format(
+                        str(c), sigs[c[0]][c[1]], netname))
+                else:
+                    netname = sigs[c[0]][c[1]]
+        component_net = {x for x in net if x[0] == Type.GATE or x[0] == Type.E0 or x[0] == Type.E1}
+        if netname != None or len(component_net) > 0:
+            nets.append((netname, component_net))
 
     print('Netlist: ' + str(nets))
+    print('Transistors: ' + str(qs))
+    return (nets, qs)
 
 
 if __name__ == "__main__":

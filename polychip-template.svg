@@ -22,6 +22,35 @@
   <defs
      id="defs4">
     <marker
+       inkscape:isstock="true"
+       style="overflow:visible"
+       id="marker4063"
+       refX="0.0"
+       refY="0.0"
+       orient="auto"
+       inkscape:stockid="Arrow1Mstart">
+      <path
+         transform="scale(0.4) translate(10,0)"
+         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
+         d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
+         id="path4061" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Mstart"
+       orient="auto"
+       refY="0.0"
+       refX="0.0"
+       id="Arrow1Mstart"
+       style="overflow:visible"
+       inkscape:isstock="true"
+       inkscape:collect="always">
+      <path
+         id="path2862"
+         d="M 0.0,0.0 L 5.0,-5.0 L -12.5,0.0 L 5.0,5.0 L 0.0,0.0 z "
+         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
+         transform="scale(0.4) translate(10,0)" />
+    </marker>
+    <marker
        inkscape:stockid="Arrow1Mend"
        orient="auto"
        refY="0.0"
@@ -287,6 +316,36 @@
          style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1;fill:#000000;fill-opacity:1"
          transform="scale(0.4) rotate(180) translate(10,0)" />
     </marker>
+    <marker
+       inkscape:stockid="Arrow1Mend"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="marker1515-4"
+       style="overflow:visible"
+       inkscape:isstock="true">
+      <path
+         inkscape:connector-curvature="0"
+         id="path1513-0"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1.00000003pt;stroke-opacity:1"
+         transform="matrix(-0.4,0,0,-0.4,-4,0)" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Mend"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="marker1527-5"
+       style="overflow:visible"
+       inkscape:isstock="true">
+      <path
+         inkscape:connector-curvature="0"
+         id="path1525-8"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1.00000003pt;stroke-opacity:1"
+         transform="matrix(-0.4,0,0,-0.4,-4,0)" />
+    </marker>
   </defs>
   <sodipodi:namedview
      id="base"
@@ -296,15 +355,15 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="0.70710678"
-     inkscape:cx="11902.841"
-     inkscape:cy="6284.3574"
+     inkscape:cx="12004.419"
+     inkscape:cy="6124.7443"
      inkscape:document-units="px"
      inkscape:current-layer="layer13"
      showgrid="false"
      inkscape:window-width="1920"
      inkscape:window-height="1017"
-     inkscape:window-x="-8"
-     inkscape:window-y="1072"
+     inkscape:window-x="1912"
+     inkscape:window-y="-8"
      inkscape:window-maximized="1"
      inkscape:snap-global="false"
      units="px"
@@ -317,7 +376,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
         <cc:license
            rdf:resource="http://creativecommons.org/licenses/by-sa/4.0/" />
       </cc:Work>
@@ -344,21 +403,6 @@
      inkscape:label="Diff"
      style="display:inline">
     <path
-       style="opacity:1;vector-effect:none;fill:#ff0000;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:7.55905533;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       d="m 11634.735,-3193.8636 60.811,-0.7071 2.121,21.9204 15.557,0.7071 0.707,33.234 -67.175,-1.4142 -1.414,-24.0417 -11.314,-0.7071 z"
-       id="path14764"
-       inkscape:connector-curvature="0" />
-    <path
-       style="opacity:1;vector-effect:none;fill:#00ff00;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:7.55905533;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       d="m 11822.825,-3169.8219 h 62.933 l 1.414,-21.2132 19.799,0.7071 -1.414,51.6188 -82.732,-1.4142 z"
-       id="path14766"
-       inkscape:connector-curvature="0" />
-    <path
-       style="opacity:1;vector-effect:none;fill:#0000ff;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:7.55905533;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       d="m 11926.77,-3189.6209 h 83.439 l 0.707,51.6188 -84.853,-0.7071 z"
-       id="path14768"
-       inkscape:connector-curvature="0" />
-    <path
        style="opacity:1;vector-effect:none;fill:#00ff00;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:7.55905533;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        d="m 11815,-3290.4172 31,2 7,-10 h 19 l -2,35 h -56 z"
        id="path14854"
@@ -368,13 +412,23 @@
        d="m 11897,-3296.4172 17,1 6,9 h 30 l -1,21 -54,1 z"
        id="path14856"
        inkscape:connector-curvature="0" />
+    <path
+       style="opacity:1;vector-effect:none;fill:#00ff00;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       d="m 12010.916,-3188.2067 0.707,51.6188 -364.867,-2.8285 -0.707,-24.0416 -148.493,2.1213 0.707,-30.4056 197.283,-1.4142 2.122,22.6274 188.797,2.8285 0.707,-21.9203 z"
+       id="path2798"
+       inkscape:connector-curvature="0" />
+    <path
+       style="opacity:1;vector-effect:none;fill:#00ff00;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:7.55905533;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       d="m 11866.666,-3298.5154 36.77,2.1214 0.707,31.8198 -40.305,0.7071 z"
+       id="path2800"
+       inkscape:connector-curvature="0" />
   </g>
   <g
      inkscape:groupmode="layer"
      id="layer4"
      inkscape:label="Poly"
      transform="translate(0,-8832.8454)"
-     style="display:inline">
+     style="display:inline;opacity:0.701">
     <path
        style="opacity:1;vector-effect:none;fill:#ff00ff;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:7.08661461;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        d="m 11895,5477.2765 v 107.8125 l -23.437,0.9375 0.937,-63.75 -24.375,-0.9375 1.875,-46.875 z"
@@ -386,7 +440,7 @@
        id="path14741"
        inkscape:connector-curvature="0" />
     <path
-       style="opacity:1;vector-effect:none;fill:#ff00ff;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:7.08661461;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       style="opacity:1;vector-effect:none;fill:#ff00ff;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        d="m 11911.875,5278.5265 1.875,43.125 -322.5,-0.9375 0.938,-46.875 z"
        id="path14743"
        inkscape:connector-curvature="0" />
@@ -403,49 +457,28 @@
   </g>
   <g
      inkscape:groupmode="layer"
-     id="layer11"
-     inkscape:label="Gates"
-     style="display:inline">
-    <path
-       style="opacity:1;vector-effect:none;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:3.77952766;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       d="m 11899.193,-3165.5793 h 34.648"
-       id="path14771"
-       inkscape:connector-curvature="0" />
-    <path
-       style="opacity:1;vector-effect:none;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:3.77952766;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       d="m 11706.153,-3157.8011 123.743,2.1213"
-       id="path14773"
-       inkscape:connector-curvature="0" />
-    <path
-       style="opacity:1;vector-effect:none;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:3.77952766;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       d="m 11554.832,-3180.4285 86.974,0.7071"
-       id="path14775"
-       inkscape:connector-curvature="0" />
-    <path
-       style="opacity:1;vector-effect:none;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:3.77952766;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       d="m 11865,-3278.4172 40,1"
-       id="path14860"
-       inkscape:connector-curvature="0" />
-  </g>
-  <g
-     inkscape:groupmode="layer"
      id="layer12"
      inkscape:label="Metal"
-     style="display:inline;opacity:0.54299999">
+     style="display:inline;opacity:0.543">
     <path
        style="opacity:1;vector-effect:none;fill:#ffff00;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:7.55905533;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        d="m 11846,-2846.4172 2,-537 49,2 -4,535 z"
        id="path14864"
        inkscape:connector-curvature="0" />
     <path
-       style="opacity:1;vector-effect:none;fill:#ffff00;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:7.55905533;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       d="m 11967,-3461.4172 -6,638 47,1 4,-641 z"
+       style="opacity:1;vector-effect:none;fill:#ffff00;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       d="m 11967,-3461.9555 -6,466.2734 47,0.7308 4,-468.4659 z"
        id="path976"
        inkscape:connector-curvature="0" />
     <path
        style="opacity:1;vector-effect:none;fill:#ffff00;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:7.55905533;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        d="m 11697,-3476.4172 -1,622 -47,5 6,-627 z"
        id="path978"
+       inkscape:connector-curvature="0" />
+    <path
+       style="opacity:1;vector-effect:none;fill:#ffff00;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       d="m 11968.489,-3008.6016 45.255,1.4142 -1.414,101.8234 h 52.326 v 39.598 l -103.238,-4.2427 z"
+       id="path2828"
        inkscape:connector-curvature="0" />
   </g>
   <g
@@ -689,11 +722,15 @@
          sodipodi:role="line"
          x="11646.049"
          y="-3669.6497"
-         id="tspan1440">The opacity and color can</tspan><tspan
+         id="tspan1440">The opacity, color, and</tspan><tspan
          sodipodi:role="line"
          x="11646.049"
          y="-3642.9829"
-         id="tspan1442">be anything desired.</tspan></text>
+         id="tspan1442">stroke can be anything</tspan><tspan
+         sodipodi:role="line"
+         x="11646.049"
+         y="-3616.3164"
+         id="tspan2806">desired.</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.33333397px;line-height:125%;font-family:'DejaVu Sans Mono';-inkscape-font-specification:'DejaVu Sans Mono, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
@@ -741,36 +778,6 @@
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.33333397px;line-height:125%;font-family:'DejaVu Sans Mono';-inkscape-font-specification:'DejaVu Sans Mono, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="11124.203"
-       y="-3099.1111"
-       id="text1352"><tspan
-         sodipodi:role="line"
-         id="tspan1350"
-         x="11124.203"
-         y="-3099.1111">Gates are lines across</tspan><tspan
-         sodipodi:role="line"
-         x="11124.203"
-         y="-3072.4443"
-         id="tspan1354">a transistor's gate, on the</tspan><tspan
-         sodipodi:role="line"
-         x="11124.203"
-         y="-3045.7778"
-         id="tspan1356">Gates layer. The endpoints</tspan><tspan
-         sodipodi:role="line"
-         x="11124.203"
-         y="-3019.1111"
-         id="tspan1358">must end in the diffusion</tspan><tspan
-         sodipodi:role="line"
-         x="11124.203"
-         y="-2992.4443"
-         id="tspan1360">for the transistor's</tspan><tspan
-         sodipodi:role="line"
-         x="11124.203"
-         y="-2965.7778"
-         id="tspan1362">electrodes.</tspan></text>
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.33333397px;line-height:125%;font-family:'DejaVu Sans Mono';-inkscape-font-specification:'DejaVu Sans Mono, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
        x="11319.365"
        y="-2906.7783"
        id="text1386"><tspan
@@ -793,63 +800,62 @@
          sodipodi:role="line"
          x="11319.365"
          y="-2800.1116"
-         id="tspan1394">gate line.</tspan></text>
+         id="tspan1394">gate area.</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.33333397px;line-height:125%;font-family:'DejaVu Sans Mono';-inkscape-font-specification:'DejaVu Sans Mono, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="10968.64"
-       y="-3626.613"
+       x="10967.226"
+       y="-3738.3359"
        id="text1404"><tspan
          sodipodi:role="line"
          id="tspan1402"
-         x="10968.64"
-         y="-3626.613">Layers:</tspan><tspan
+         x="10967.226"
+         y="-3738.3359">Layers:</tspan><tspan
          sodipodi:role="line"
-         x="10968.64"
-         y="-3599.9463"
+         x="10967.226"
+         y="-3711.6692"
          id="tspan1406">* Metal: metal</tspan><tspan
          sodipodi:role="line"
-         x="10968.64"
-         y="-3573.2798"
+         x="10967.226"
+         y="-3685.0027"
          id="tspan1408">* Diff: diffusion</tspan><tspan
          sodipodi:role="line"
-         x="10968.64"
-         y="-3546.613"
+         x="10967.226"
+         y="-3658.3359"
          id="tspan1410">* Poly: polysilicon</tspan><tspan
          sodipodi:role="line"
-         x="10968.64"
-         y="-3519.9463"
-         id="tspan1412">* Contacts: contacts between Metal/Diff/Poly</tspan><tspan
+         x="10967.226"
+         y="-3631.6692"
+         id="tspan1414">* Contacts: contacts between Metal/Diff/Poly</tspan><tspan
          sodipodi:role="line"
-         x="10968.64"
-         y="-3493.2798"
-         id="tspan1414">* Gates: gates of transistors</tspan><tspan
-         sodipodi:role="line"
-         x="10968.64"
-         y="-3466.613"
+         x="10967.226"
+         y="-3605.0027"
          id="tspan1416">* QNames: transistor names</tspan><tspan
          sodipodi:role="line"
-         x="10968.64"
-         y="-3439.9463"
+         x="10967.226"
+         y="-3578.3359"
          id="tspan1418">* SNames: signal names</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.33333397px;line-height:125%;font-family:'DejaVu Sans Mono';-inkscape-font-specification:'DejaVu Sans Mono, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="11238.755"
-       y="-3390.4392"
+       x="11047.836"
+       y="-3531.8606"
        id="text1422"><tspan
          sodipodi:role="line"
          id="tspan1420"
-         x="11238.755"
-         y="-3390.4392">All text must be</tspan><tspan
+         x="11047.836"
+         y="-3531.8606"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-family:'DejaVu Sans Mono';-inkscape-font-specification:'DejaVu Sans Mono Bold';fill:#ff0000">All text must be</tspan><tspan
          sodipodi:role="line"
-         x="11238.755"
-         y="-3363.7725"
-         id="tspan1424">DejaVu Sans Mono normal,</tspan><tspan
+         x="11047.836"
+         y="-3505.1938"
+         id="tspan1424"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-family:'DejaVu Sans Mono';-inkscape-font-specification:'DejaVu Sans Mono Bold';fill:#ff0000">DejaVu Sans Mono normal,</tspan><tspan
          sodipodi:role="line"
-         x="11238.755"
-         y="-3337.106"
-         id="tspan1426">not bold or oblique.</tspan></text>
+         x="11047.836"
+         y="-3478.5273"
+         id="tspan1426"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-family:'DejaVu Sans Mono';-inkscape-font-specification:'DejaVu Sans Mono Bold';fill:#ff0000">not bold or oblique.</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.33333397px;line-height:125%;font-family:'DejaVu Sans Mono';-inkscape-font-specification:'DejaVu Sans Mono, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
@@ -903,7 +909,7 @@
          y="-3200.1006"
          id="tspan1452-7">Metal and Diff.</tspan></text>
     <path
-       style="opacity:1;vector-effect:none;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:3.77952766;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;marker-end:url(#marker1497)"
+       style="opacity:1;vector-effect:none;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:3.78;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;marker-end:url(#marker1497)"
        d="m 12080.212,-3215.0768 -56.568,38.1838"
        id="path1493"
        inkscape:connector-curvature="0" />
@@ -923,37 +929,10 @@
        id="path1511"
        inkscape:connector-curvature="0" />
     <path
-       style="opacity:1;vector-effect:none;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:3.77952766;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;marker-end:url(#marker1521)"
-       d="m 11425.431,-3103.3539 135.765,-59.3969"
-       id="path1517"
-       inkscape:connector-curvature="0" />
-    <path
        style="opacity:1;vector-effect:none;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:3.77952766;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;marker-end:url(#marker1527)"
        d="m 11565.439,-2942.1335 192.333,-190.9189"
        id="path1523"
        inkscape:connector-curvature="0" />
-    <text
-       xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.33333397px;line-height:125%;font-family:'DejaVu Sans Mono';-inkscape-font-specification:'DejaVu Sans Mono, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="12063.242"
-       y="-2908.1924"
-       id="text1531"><tspan
-         sodipodi:role="line"
-         id="tspan1529"
-         x="12063.242"
-         y="-2908.1924">Python 3 dependencies can be installed</tspan><tspan
-         sodipodi:role="line"
-         x="12063.242"
-         y="-2881.5256"
-         id="tspan1533">with pip. These are:</tspan><tspan
-         sodipodi:role="line"
-         x="12063.242"
-         y="-2854.8591"
-         id="tspan1535">* matplotlib</tspan><tspan
-         sodipodi:role="line"
-         x="12063.242"
-         y="-2828.1924"
-         id="tspan1537">* networkx</tspan></text>
     <path
        style="opacity:1;vector-effect:none;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:3.77952766;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;marker-end:url(#marker1543)"
        d="m 11968.489,-3530.4464 -50.911,-1.4142"
@@ -962,68 +941,105 @@
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.33333397px;line-height:125%;font-family:'DejaVu Sans Mono';-inkscape-font-specification:'DejaVu Sans Mono, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="11517.757"
-       y="-2754.9202"
+       x="11209.458"
+       y="-2729.4644"
        id="text1531-1"><tspan
          sodipodi:role="line"
-         x="11517.757"
-         y="-2754.9202"
-         id="tspan1537-1">You can run the program against this file like so:</tspan><tspan
+         x="11209.458"
+         y="-2729.4644"
+         id="tspan1537-1"
+         style="font-size:16px;line-height:100%">You can run the program against this file like so:</tspan><tspan
          sodipodi:role="line"
-         x="11517.757"
-         y="-2728.2534"
-         id="tspan1581">&gt; python3 polychip.py polychip-template.svg</tspan><tspan
+         x="11209.458"
+         y="-2702.7976"
+         id="tspan1581"
+         style="font-size:16px;line-height:100%">&gt; python3 polychip/polychip.py polychip-template.svg</tspan><tspan
          sodipodi:role="line"
-         x="11517.757"
-         y="-2701.5869"
-         id="tspan1583" /><tspan
+         x="11209.458"
+         y="-2676.1311"
+         id="tspan1583"
+         style="font-size:16px;line-height:100%" /><tspan
          sodipodi:role="line"
-         x="11517.757"
-         y="-2674.9202"
-         id="tspan1585">The output should show this netlist (in any order):</tspan><tspan
+         x="11209.458"
+         y="-2649.4644"
+         id="tspan1585"
+         style="font-size:16px;line-height:100%">The output should show this netlist (in any order):</tspan><tspan
          sodipodi:role="line"
-         x="11517.757"
-         y="-2648.2534"
-         id="tspan1587" /><tspan
+         x="11209.458"
+         y="-2622.7976"
+         id="tspan1587"
+         style="font-size:16px;line-height:100%" /><tspan
          sodipodi:role="line"
-         x="11517.757"
-         y="-2621.5869"
-         id="tspan1591">Netlist: [('VCC', {'q_Q4_e0', 'q_Q3_e0'}), (None, {'q_Q3_e1', 'q_Q3_g', 'q_Q2_e1'}),</tspan><tspan
+         x="11209.458"
+         y="-2596.1311"
+         style="font-size:16px;line-height:100%"
+         id="tspan4292">Netlist: [('VCC', {(Type.E1, 'Q4'), (Type.E0, 'Q3')}),</tspan><tspan
          sodipodi:role="line"
-         x="11517.757"
-         y="-2594.9202"
-         id="tspan1597">('GND', {'q_Q2_e0'}), (None, {'q_Q1_e1'}), ('SIGNAL1', {'q_Q1_g'}),</tspan><tspan
+         x="11209.458"
+         y="-2569.4644"
+         style="font-size:16px;line-height:100%"
+         id="tspan4310">('SIGNAL1', {(Type.GATE, 'Q1')}), ('GND', {(Type.E1, 'Q2')}),</tspan><tspan
          sodipodi:role="line"
-         x="11517.757"
-         y="-2568.2534"
-         id="tspan1593">('SIGNAL2', {'q_Q2_g', 'q_Q4_g', 'q_Q1_e0'})]</tspan></text>
+         x="11209.458"
+         y="-2542.7976"
+         style="font-size:16px;line-height:100%"
+         id="tspan4312">('SIGNAL2', {(Type.E0, 'Q4'), (Type.GATE, 'Q4'), (Type.E0, 'Q1'), (Type.GATE, 'Q2')}),</tspan><tspan
+         sodipodi:role="line"
+         x="11209.458"
+         y="-2516.1311"
+         style="font-size:16px;line-height:100%"
+         id="tspan4314">(None, {(Type.E0, 'Q2'), (Type.E1, 'Q3'), (Type.GATE, 'Q3')}),</tspan><tspan
+         sodipodi:role="line"
+         x="11209.458"
+         y="-2489.4644"
+         style="font-size:16px;line-height:100%"
+         id="tspan4316">(None, {(Type.E1, 'Q1')})]</tspan><tspan
+         sodipodi:role="line"
+         x="11209.458"
+         y="-2462.7976"
+         id="tspan4282"
+         style="font-size:16px;line-height:100%">Transistors: [Q2 @ 11916.056015, 6341.871371, Q3 @ 11767.623772, 6332.522573, Q4 @ 11600.057932, 6356.219396, Q1 @ 11883.434313, 6459.398302]</tspan></text>
+    <path
+       style="opacity:1;vector-effect:none;fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:3.78;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;marker-start:url(#Arrow1Mstart)"
+       d="m 12025.058,-2991.631 104.652,39.598"
+       id="path2836"
+       inkscape:connector-curvature="0" />
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.33333397px;line-height:125%;font-family:'DejaVu Sans Mono';-inkscape-font-specification:'DejaVu Sans Mono, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="11716.76"
-       y="-3478.1204"
-       id="text1601"><tspan
+       x="12118.483"
+       y="-2929.1289"
+       id="text1450-6-1"><tspan
          sodipodi:role="line"
-         id="tspan1599"
-         x="11716.76"
-         y="-3478.1204">These must be</tspan><tspan
+         x="12118.483"
+         y="-2929.1289"
+         id="tspan1452-7-5">Polychip automatically joins</tspan><tspan
          sodipodi:role="line"
-         x="11716.76"
-         y="-3451.4536"
-         id="tspan1603">separate diff</tspan><tspan
-         sodipodi:role="line"
-         x="11716.76"
-         y="-3424.7871"
-         id="tspan1605">polygons!</tspan></text>
+         x="12118.483"
+         y="-2902.4622"
+         id="tspan3281">overlapping polygons!</tspan></text>
     <path
-       style="opacity:1;vector-effect:none;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:3.77952766;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;marker-end:url(#marker1611)"
-       d="m 11770.499,-3410.2382 74.954,111.7228"
-       id="path1607"
+       style="opacity:1;vector-effect:none;fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:3.78;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;marker-end:url(#marker1617)"
+       d="m 11402.804,-3084.9691 97.581,-69.2965"
+       id="path4047"
        inkscape:connector-curvature="0" />
-    <path
-       style="opacity:1;vector-effect:none;fill:none;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:3.77952766;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;marker-end:url(#marker1617)"
-       d="m 11842.624,-3434.2799 63.64,1.4143 5.657,125.865"
-       id="path1613"
-       inkscape:connector-curvature="0" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.33333397px;line-height:125%;font-family:'DejaVu Sans Mono';-inkscape-font-specification:'DejaVu Sans Mono, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       x="11065.41"
+       y="-3061.1167"
+       id="text1019-8"><tspan
+         sodipodi:role="line"
+         x="11065.41"
+         y="-3061.1167"
+         id="tspan1023-7">Diff is continuous. Polychip</tspan><tspan
+         sodipodi:role="line"
+         x="11065.41"
+         y="-3034.45"
+         id="tspan4273">detects transistors by their</tspan><tspan
+         sodipodi:role="line"
+         x="11065.41"
+         y="-3007.7834"
+         id="tspan4271">poly completely crossing diff.</tspan></text>
   </g>
 </svg>

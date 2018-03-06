@@ -1,98 +1,246 @@
-from svg_parse import *
+import functools
 import shapely
 import shapely.geometry
 
-def layer_path(name):
-    return "./svg:g[@inkscape:groupmode='layer'][@inkscape:label='" + name + "']"
+from enum import Enum, unique
+from svg_parse import *
 
-def to_inkscape_coords(pt, doc_height):
-    return [pt.x, doc_height - pt.y]
+def coerce_multipoly(poly):
+    """Coerces the given poly to be a MultiPoly.
 
-def parse_layers(root):
-    layer = {}
+    Results from shapely operations can be Polygons or MultiPolygons. It's convenient to
+    have them always be MultiPolygons so that, for example, we can iterate over whatever it
+    is that was returned.
 
-    layer['contacts'] = root.findall(layer_path("Contacts"), namespaces)[0]
-    layer['poly'] = root.findall(layer_path("Poly"), namespaces)[0]
-    layer['diff'] = root.findall(layer_path("Diff"), namespaces)[0]
-    layer['metal'] = root.findall(layer_path("Metal"), namespaces)[0]
-    layer['gates'] = root.findall(layer_path("Gates"), namespaces)[0]
-    layer['qnames'] = root.findall(layer_path("QNames"), namespaces)[0]
-    layer['snames'] = root.findall(layer_path("SNames"), namespaces)[0]
+    Args:
+        poly (shapely.geometry.Polygon or shapely.geometry.MultiPolygon): The poly to coerce.
 
-    layer_translates = {}
-    layer_translates['contacts'] = parse_translate(layer['contacts'].get('transform'))
-    layer_translates['poly'] = parse_translate(layer['poly'].get('transform'))
-    layer_translates['diff'] = parse_translate(layer['diff'].get('transform'))
-    layer_translates['metal'] = parse_translate(layer['metal'].get('transform'))
-    layer_translates['gates'] = parse_translate(layer['gates'].get('transform'))
-    layer_translates['qnames'] = parse_translate(layer['qnames'].get('transform'))
-    layer_translates['snames'] = parse_translate(layer['snames'].get('transform'))
+    Returns:
+        shapely.geometry.MultiPolygon: The coerced poly.
+    """
+    if type(poly) == shapely.geometry.Polygon:
+        return shapely.geometry.MultiPolygon([poly])
+    return poly
 
-    shapes = {}
 
-    shapes['contacts'] = root.findall(layer_path("Contacts") + "/svg:rect", namespaces)
-    shapes['poly'] = root.findall(layer_path("Poly") + "/svg:path", namespaces)
-    shapes['diff'] = root.findall(layer_path("Diff") + "/svg:path", namespaces)
-    shapes['metal'] = root.findall(layer_path("Metal") + "/svg:path", namespaces)
-    shapes['gates'] = root.findall(layer_path("Gates") + "/svg:path", namespaces)
-    shapes['qnames'] = root.findall(layer_path("QNames") + "/svg:text", namespaces)
-    shapes['snames'] = root.findall(layer_path("SNames") + "/svg:text", namespaces)
+@unique
+class Layer(Enum):
+    """ Types of layers."""
+    METAL = 1
+    POLY = 2
+    DIFF = 3
+    CONTACTS = 4
+    QNAMES = 5
+    SNAMES = 6
 
-    contacts = {}
-    for c in shapes['contacts']:
-        contacts[c.get('id')] = {'loc': shapely.geometry.Point(
-            float(c.get('x')) + float(c.get('width'))/2 + layer_translates['contacts'][0],
-            float(c.get('y')) + float(c.get('height'))/2 + layer_translates['contacts'][1])}
 
-    print("{:d} contacts".format(len(contacts)))
+class Label(object):
+    """Represents the text and extents of a label.
 
-    poly_paths = {}
-    for p in shapes['poly']:
-        poly_paths['p_' + p.get('id')] = {'path': svgpath_to_shapely_path(p.get('d'), layer_translates['poly']), 
-                                          'conn': []}
-    diff_paths = {}
-    for p in shapes['diff']:
-        diff_paths['d_' + p.get('id')] = {'path': svgpath_to_shapely_path(p.get('d'), layer_translates['diff']), 
-                                          'conn': []}
+    Args:
+    Attributes:
+        text (str): The text of the label.
+        extents (shapely.geometry.LineString): A line from bottom beginning
+            to top end (relative to the text string, not its orientation).
+    """
+    def __init__(self, text, extents):
+        self.text = text
+        self.extents = extents
+        self.center = extents.centroid
 
-    metal_paths = {}
-    for p in shapes['metal']:
-        metal_paths['m_' + p.get('id')] = {'path': svgpath_to_shapely_path(p.get('d'), layer_translates['metal']), 
-                                           'conn': []}
 
-    print("{:d} diffs".format(len(diff_paths)))
-    print("{:d} metals".format(len(metal_paths)))
-    print("{:d} polys".format(len(poly_paths)))
+class InkscapeFile:
+    """Represents all the paths and names found in an Inkscape file.
 
-    qnames = []
-    for t in shapes['qnames']:
-        qnames.append(parse_shapely_text(t, layer_translates['qnames']))
+    Args:
+        root (xml.etree.ElementTree.Element): The root element for the Inkscape document.
 
-    transistors = {}
-    for g in shapes['gates']:
-        #path = svgpath_to_mppath(g.get('d'), layer_translates['gates'])
-        path = svgpath_to_shapely_path(g.get('d'), layer_translates['gates'])
-        name = 'q_' + g.get('id')
-        for n in qnames:
-            text, textpath = n
-            if textpath.intersects(path):
-                name = 'q_' + text
-                break
-        transistors[name] = {'path': path}
+    Attributes:
+        contacts (shapely.geometry.MultiPoint): All the found contacts. Each point
+            represents the center position of a rectangular contact.
+        qnames([Label]): The list of found transistor labels.
+        snames([Label]): The list of found signal labels.
+        poly_array([shapely.geometry.Polygon]): The list of found polysilicon polygons.
+        metal_array([shapely.geometry.Polygon]): The list of found metal polygons.
+        diff_array([shapely.geometry.Polygon]): The list of found diff polygons.
+            Note that this will be altered in a later stage when transistors are found.
+        multipoly(shapely.geometry.MultiPolygon): All the found polysilicon polygons.
+        multidiff(shapely.geometry.MultiPolygon): All the found diffusion polygons.
+    """
+    def __init__(self, root):
+        self.contacts = None
+        self.qnames = []
+        self.snames = []
+        self.poly_array = []
+        self.metal_array = []
+        self.diff_array = []
+        self.multipoly = None
+        self.multidiff = None
 
-    print("{:d} transistors".format(len(transistors)))
+        self.to_screen_coords_transform_ = self.extract_screen_transform(root)
 
-    for t in shapes['snames']:
-        text, path = parse_shapely_text(t, layer_translates['snames'])
-        for paths in [poly_paths, metal_paths, diff_paths]:
-            found = False
-            for pid, p in paths.items():
-                if path.intersects(p['path']):
-                    p['label'] = text
-                    print("Path {:s} is labeled signal {:s}".format(pid, text))
-                    found = True
-                    break
-            if found:
-                break
+        self.transform = {
+            Layer.CONTACTS: self.to_screen_coords_transform_,
+            Layer.POLY: self.to_screen_coords_transform_,
+            Layer.METAL: self.to_screen_coords_transform_,
+            Layer.DIFF: self.to_screen_coords_transform_,
+            Layer.QNAMES: self.to_screen_coords_transform_,
+            Layer.SNAMES: self.to_screen_coords_transform_
+        }
 
-    return (contacts, poly_paths, diff_paths, metal_paths, qnames, transistors)
+        poly_paths = {}
+        diff_paths = {}
+        metal_paths = {}
+
+        layer = {}
+
+        layer[Layer.CONTACTS] = root.findall(InkscapeFile.layer_path("Contacts"), namespaces)[0]
+        layer[Layer.POLY] = root.findall(InkscapeFile.layer_path("Poly"), namespaces)[0]
+        layer[Layer.DIFF] = root.findall(InkscapeFile.layer_path("Diff"), namespaces)[0]
+        layer[Layer.METAL] = root.findall(InkscapeFile.layer_path("Metal"), namespaces)[0]
+        layer[Layer.QNAMES] = root.findall(InkscapeFile.layer_path("QNames"), namespaces)[0]
+        layer[Layer.SNAMES] = root.findall(InkscapeFile.layer_path("SNames"), namespaces)[0]
+
+        for y in Layer:
+            t = Transform.parse(layer[y].get('transform'))
+            self.transform[y] = self.transform[y] @ t
+        shapes = {}
+
+        shapes[Layer.CONTACTS] = root.findall(InkscapeFile.layer_path("Contacts") + "/svg:rect", namespaces)
+        shapes[Layer.POLY] = root.findall(InkscapeFile.layer_path("Poly") + "/svg:path", namespaces)
+        shapes[Layer.DIFF] = root.findall(InkscapeFile.layer_path("Diff") + "/svg:path", namespaces)
+        shapes[Layer.METAL] = root.findall(InkscapeFile.layer_path("Metal") + "/svg:path", namespaces)
+        shapes[Layer.QNAMES] = root.findall(InkscapeFile.layer_path("QNames") + "/svg:text", namespaces)
+        shapes[Layer.SNAMES] = root.findall(InkscapeFile.layer_path("SNames") + "/svg:text", namespaces)
+
+        print("Processing contact rectangles")
+        contact_array = []
+        contact_transform = self.transform[Layer.CONTACTS].to_shapely_transform()
+        for c in shapes[Layer.CONTACTS]:
+            pt = shapely.geometry.Point(
+                float(c.get('x')) + float(c.get('width'))/2,
+                float(c.get('y')) + float(c.get('height'))/2)
+            pt = shapely.affinity.affine_transform(pt, contact_transform)
+            contact_array.append(pt)
+        self.contacts = shapely.geometry.MultiPoint(contact_array)
+
+        print("{:d} contacts".format(len(self.contacts)))
+
+        print("Processing poly paths")
+        for p in shapes[Layer.POLY]:
+            poly_paths['p_' + p.get('id')] = svgpath_to_shapely_path(p, self.transform[Layer.POLY])
+        print("Processing diff paths")
+        for p in shapes[Layer.DIFF]:
+            diff_paths['d_' + p.get('id')] = svgpath_to_shapely_path(p, self.transform[Layer.DIFF])
+        print("Processing metal paths")
+        for p in shapes[Layer.METAL]:
+            metal_paths['m_' + p.get('id')] = svgpath_to_shapely_path(p, self.transform[Layer.METAL])
+        print("Processing qnames text")
+        for t in shapes[Layer.QNAMES]:
+            text, extents = parse_shapely_text(t, self.transform[Layer.QNAMES])
+            self.qnames.append(Label(text, extents))
+        print("Processing snames text")
+        for t in shapes[Layer.SNAMES]:
+            text, extents = parse_shapely_text(t, self.transform[Layer.SNAMES])
+            self.snames.append(Label(text, extents))
+
+        self.multidiff = coerce_multipoly(shapely.ops.unary_union(diff_paths.values()))
+        self.diff_array = list(self.multidiff.geoms)
+        list.sort(self.diff_array, key = functools.cmp_to_key(InkscapeFile.poly_cmp))
+
+        self.multipoly = coerce_multipoly(shapely.ops.unary_union(poly_paths.values()))
+        self.poly_array = list(self.multipoly.geoms)
+        list.sort(self.poly_array, key = functools.cmp_to_key(InkscapeFile.poly_cmp))
+
+        multimetal = coerce_multipoly(shapely.ops.unary_union(metal_paths.values()))
+        self.metal_array = list(multimetal.geoms)
+        list.sort(self.metal_array, key = functools.cmp_to_key(InkscapeFile.poly_cmp))
+
+        print("{:d} diffs".format(len(self.diff_array)))
+        print("{:d} metals".format(len(self.metal_array)))
+        print("{:d} polys".format(len(self.poly_array)))
+        print("{:d} qnames".format(len(self.qnames)))
+        print("{:d} snames".format(len(self.snames)))
+
+
+    def extract_screen_transform(self, root):
+        """Extracts the height, in pixels, of the document.
+
+        Args:
+            root (xml.etree.ElementTree.Element): The root element for the Inkscape document.
+
+        Returns:
+            Transform: The transform to get from SVG coordinates to Inkscape screen coordinates.
+        """
+        height = root.get('height')
+        width = root.get('width')
+        xdpi = root.get(qname(root, "inkscape:export-xdpi"))
+        ydpi = root.get(qname(root, "inkscape:export-ydpi"))
+        if height.endswith('mm'):
+            h = float(xdpi) * float(height[:-2]) / 25.4
+        else:
+            h = float(height)
+
+        if width.endswith('mm'):
+            w = float(ydpi) * float(width[:-2]) / 25.4
+        else:
+            w = float(width)
+
+        transform = Transform(1, 0, 0, -1, 0, h)
+
+        # If there's a viewBox, then the document scale needs adjustment.
+        viewbox = root.get('viewBox')
+        if viewbox is None:
+            return transform
+        extents = [float(x) for x in re.split('[, ]', viewbox)]
+        scalex = w / extents[2]
+        scaley = h / extents[3]
+        return transform @ Transform.scale(scalex, scaley)
+
+
+    def replace_diff_array(self, diffs):
+        """Replaces the drawing's diff_array with the given one, sorting it first.
+
+        This happens after transistors are identified. The transistor gates split existing
+        diffs in two.
+
+        Args:
+            diffs ([shapely.geometry.Polygon]): The array of diff polygons.
+        """
+        self.diff_array = diffs
+        list.sort(self.diff_array, key = functools.cmp_to_key(InkscapeFile.poly_cmp))
+
+
+    @staticmethod
+    def layer_path(name):
+        return "./svg:g[@inkscape:groupmode='layer'][@inkscape:label='" + name + "']"
+
+    @staticmethod
+    def poly_cmp(poly1, poly2):
+        """Provides an ordering for two polygons based on their bounding box.
+
+        The polygon whose bounding box is leftmost of the two is the lower one. If both polygons are
+        left-aligned, then the polygon that is lowermost of the two is the lower one.
+
+        Args:
+            poly1 (shapely.geometry.Polygon): The first polygon to compare.
+            poly2 (shapely.geometry.Polygon): The polygon to compare the first polygon to.
+
+        Returns:
+            int:
+                -1 if poly1 is "less than" poly2
+                1 if poly1 is "greater than" poly2
+                0 if poly1 is "equal to" poly 2
+
+        """
+        minx1, miny1, _, _ = poly1.bounds
+        minx2, miny2, _, _ = poly2.bounds
+        if minx1 < minx2:
+            return -1
+        if minx1 > minx2:
+            return 1
+        if miny1 < miny2:
+            return -1
+        if miny1 > miny2:
+            return 1
+        return 0
