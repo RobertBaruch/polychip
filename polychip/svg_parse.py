@@ -3,6 +3,9 @@ import math
 import re
 import shapely
 import shapely.geometry
+import shapely.validation
+import sys
+import traceback
 
 from lxml import etree
 
@@ -191,118 +194,291 @@ def qname(element, qtag):
     return etree.QName(element.nsmap[splits[0]], splits[1])
 
 
-def svgpath_to_shapely_path(element, trans):
+def add_relative_point_to_path(dx, dy, path):
+    if math.fabs(dx) + math.fabs(dy) < 0.01:
+        return
+    path.append((path[-1][0] + dx, path[-1][1] + dy))
+
+
+def add_absolute_point_to_path(x, y, path):
+    if len(path) == 0:
+        path.append((x, y))
+        return
+    add_relative_point_to_path(x - path[-1][0], y - path[-1][1], path)
+
+
+def svgelement_to_shapely_polygon(element, trans, debug = False):
+    if element.tag.endswith('rect'):
+        return svgrect_to_shapely_path(element, trans, debug)
+    if element.tag.endswith('path'):
+        return svgpath_to_shapely_path(element, trans, debug)
+    else:
+        print("Error: unknown element skipped: " + element.tag)
+        return None
+
+
+def svgrect_to_shapely_path(element, trans, debug = False):
+    """Converts an svg <rect> element into a shapely.geometry.Polygon.
+
+    Args:
+        element (etree.Element): The svg <rect> element.
+        trans (Transform): The parent element's transform.
+
+    Returns:
+        shapely.geometry.Polygon: The polygon.
+    """
+    transform = (trans @ Transform.parse(element.get('transform'))).to_shapely_transform()
+    x = float(element.get('x'))
+    y = float(element.get('y'))
+    x2 = x + float(element.get('width'))
+    y2 = y + float(element.get('height'))
+    if x > x2:
+        x, x2 = x2, x
+    if y > y2:
+        y, y2 = y2, y
+    return shapely.affinity.affine_transform(shapely.geometry.box(x, y, x2, y2), transform)
+
+
+def polygon_is_topologically_sound(id, polygon):
+    """Returns whether a polygon with no holes is topologically sound.
+
+    Assumes the polygon is oriented counter-clockwise (right-hand rule -> positive area).
+
+    If a polygon crosses itself, some bits of its area will be negative. Subtracting the polygon
+    from its own bounding box will likely result in shapely throwing an exception.
+    """
+    minx, miny, maxx, maxy = polygon.bounds
+    bounding_box = shapely.geometry.box(minx, miny, maxx, maxy)
+    try:
+        leftovers = bounding_box.difference(polygon)
+        return True
+    except shapely.errors.TopologicalError:
+        assert False, ("Warning: Skipping path {:s} which starts at {:s} because it is topologically "
+            "unsound (e.g. crosses itself).".format(
+                id, str((polygon.exterior.coords[0][0], polygon.exterior.coords[0][1]))))
+
+def cubic_bezier_point(t, p0, p1, p2, p3):
+    """Returns the point along the bezier curve corresponding to the parameter t.
+
+    Args:
+        t (float): The parameter (0 <= t <= 1).
+        p0 ((float, float)): The (x, y) coordinates of the starting point.
+        p1 ((float, float)): The coordinates of the first control point.
+        p2 ((float, float)): The coordinates of the second control point.
+        p3 ((float, float)): The coordinates of the ending point.
+
+    Returns:
+        (float, float): The coordinate of the point.
+    """
+    assert t >= 0 and t <= 1
+    x = ((1 - t) * (1 - t) * (1 - t) * p0[0] + 3 * t * (1 - t) * (1 - t) * p1[0] +
+        3 * t * t * (1 - t) * p2[0] + t * t * t * p3[0])
+    y = ((1 - t) * (1 - t) * (1 - t) * p0[1] + 3 * t * (1 - t) * (1 - t) * p1[1] +
+        3 * t * t * (1 - t) * p2[1] + t * t * t * p3[1])
+    return (x, y)
+
+
+def cubic_bezier_points(n, p0, p1, p2, p3):
+    """Returns n points along the cubic bezier curve.
+
+    The points are not evenly spaced, but they are in parameter space (t):
+
+    B(t) = p0*(1-t)^3 + 3p1*t(1-t)^2 + 3p2*t^2(1-t) + p3 * t^3 (0 <= t <= 1)
+
+    Args:
+        n (int): The number of points to return. Minimum 2 (i.e. the endpoints).
+        p0 ((float, float)): The (x, y) coordinates of the starting point.
+        p1 ((float, float)): The coordinates of the first control point.
+        p2 ((float, float)): The coordinates of the second control point.
+        p3 ((float, float)): The coordinates of the ending point.
+
+    Returns:
+        [(float, float)]: An array of n coordinates along the curve.
+    """
+    assert n >= 2
+    return [cubic_bezier_point(t, p0, p1, p2, p3) for t in (float(x) / (n - 1) for x in range(n))]
+
+
+def svgpath_to_shapely_path(element, trans, debug = False):
     """Converts an svg <path> element into a shapely.geometry.Polygon.
 
-    Only supports moveto and lineto. No curves!
+    Only supports moveto, lineto, vertical, and horizontal. No curves!
 
-    It seems that for paths with holes, the shell (outer path) comes first, then the holes (inner paths).
+    It seems that an svg path starts with a shell, which may be clockwise or counter-clockwise.
+    Then, for every following subpath, it is another shell if it has the same orientation, or
+    a hole if it has the opposite orientation.
+
+    For consistency, we modify the orientations so thatshells are always counter-clockwise
+    (right-hand rule -> positive area) and holes are clockwise (right-hand rule -> negative area).
+
+    When a path is explicity closed (i.e. a -> b -> c -> a) and the points are relative moves, 
+    and then followed by 'z' to close the path, there is the problem of floating point inaccuracy making
+    the last 'a' not equal to the first 'a'. Thus, when we hit the 'z' at the end of the path, we check
+    to see if the last 'a' is sufficiently close to the first 'a'. If so, eliminate the last 'a'. This
+    lets shapely close the path exactly by using the first 'a' as the last 'a' instead.
+
+    If two neighboring points are very close to each other, or on top of each other, they are merged.
 
     Args:
         element (etree.Element): The svg <path> element.
         trans (Transform): The parent element's transform.
 
     Returns:
-        shapely.geometry.Polygon: The polygon.
+        shapely.geometry.Polygon: The polygon found, or None otherwise.
     """
-    tokens = re.split('[, ]', element.get('d'))
-    polys = []
-    i = 0;
-    x = 0
-    y = 0
-    coords = []
-    relative_mode = False
-    commands = {'m', 'M', 'l', 'L', 'v', 'V', 'h', 'H', 'z'}
-
-    while i < len(tokens):
-        if tokens[i] == "":
-            i += 1
-
-        elif tokens[i] not in commands:
-            if relative_mode:
-                x2 = x + float(tokens[i])
-                y2 = y + float(tokens[i + 1])
-            else:
-                x2 = float(tokens[i])
-                y2 = float(tokens[i + 1])
-            coords.append((x2, y2))
-            x = x2
-            y = y2
-            i += 2
-
-        elif tokens[i] == 'm':
-            relative_mode = True
-            x += float(tokens[i + 1])
-            y += float(tokens[i + 2])
-            coords.append((x, y))
-            i += 3
-
-        elif tokens[i] == 'M':
-            relative_mode = False
-            x = float(tokens[i + 1])
-            y = float(tokens[i + 2])
-            coords.append((x, y))
-            i += 3
-
-        elif tokens[i] == 'l':
-            relative_mode = True
-            x2 = x + float(tokens[i + 1])
-            y2 = y + float(tokens[i + 2])
-            coords.append((x2, y2))
-            x = x2
-            y = y2
-            i += 3
-        elif tokens[i] == 'L':
-            relative_mode = False
-            x2 = float(tokens[i + 1])
-            y2 = float(tokens[i + 2])
-            coords.append((x2, y2))
-            x = x2
-            y = y2
-            i += 3
-        elif tokens[i] == 'h':
-            x2 = x + float(tokens[i + 1])
-            coords.append((x2, y))
-            x = x2
-            i += 2
-        elif tokens[i] == 'H':
-            x2 = float(tokens[i + 1])
-            coords.append((x2, y))
-            x = x2
-            i += 2
-        elif tokens[i] == 'v':
-            y2 = y + float(tokens[i + 1])
-            coords.append((x, y2))
-            y = y2
-            i += 2
-        elif tokens[i] == 'V':
-            y2 = float(tokens[i + 1])
-            coords.append((x, y2))
-            y = y2
-            i += 2
-        elif tokens[i] == 'z':
-            polys.append(coords)
-            # Start at start point of this path.
-            x = coords[0][0]
-            y = coords[0][1]
-            coords = []
-            i += 1
-        else:
-            raise AssertionError("Unknown line command " + tokens[i])
-
+    path_id = element.get('id')
+    path_string = element.get('d')
+    start_point = None
     transform = (trans @ Transform.parse(element.get('transform'))).to_shapely_transform()
 
-    if len(polys) == 1 and len(polys[0]) == 2:
-        return shapely.affinity.affine_transform(
-            shapely.geometry.LineString(polys[0]), transform)
+    try:
+        tokens = re.split('[, ]', path_string)
+        rings = []
+        i = 0;
+        endpoint = (0, 0)
+        coords = []
+        last_command = None
+        commands = "cCmMlLvVhHzZ"
+        # The curves we don't yet support
+        unsupported_commands = "qQtTsSA"
 
-    shell = polys[0]
-    holes = None
-    if len(polys) > 1:
-        holes = polys[1:]
+        while i < len(tokens):
+            if tokens[i] == "":
+                i += 1
+                continue
 
-    return shapely.affinity.affine_transform(
-        shapely.geometry.Polygon(shell, holes), transform)
+            elif tokens[i] in unsupported_commands:
+                print("Warning: {:s}-curves in paths are not supported. Skipping path {:s}, curve starts at {:s}".format(
+                    tokens[i], path_id, str((point.x, point.y))))
+                return None
+
+            elif tokens[i] not in commands:
+                command = last_command
+
+            else:
+                command = tokens[i]
+                last_command = command
+                i += 1
+
+            if command == 'm':
+                last_command = 'l'
+                dx = float(tokens[i])
+                dy = float(tokens[i + 1])
+                add_absolute_point_to_path(endpoint[0] + dx, endpoint[1] + dy, coords)
+                i += 2
+
+            elif command == 'M':
+                last_command = 'L'
+                x = float(tokens[i])
+                y = float(tokens[i + 1])
+                add_absolute_point_to_path(x, y, coords)
+                i += 2
+
+            elif command == 'c':
+                px0 = coords[-1][0]
+                py0 = coords[-1][1]
+                px1 = px0 + float(tokens[i])
+                py1 = py0 + float(tokens[i + 1])
+                px2 = px0 + float(tokens[i + 2])
+                py2 = py0 + float(tokens[i + 3])
+                px3 = px0 + float(tokens[i + 4])
+                py3 = py0 + float(tokens[i + 5])
+                for p in cubic_bezier_points(4, (px0, py0), (px1, py1), (px2, py2), (px3, py3)):
+                    add_absolute_point_to_path(p[0], p[1], coords)
+                i += 6
+
+            elif command == 'C':
+                px0 = coords[-1][0]
+                py0 = coords[-1][1]
+                px1 = float(tokens[i])
+                py1 = float(tokens[i + 1])
+                px2 = float(tokens[i + 2])
+                py2 = float(tokens[i + 3])
+                px3 = float(tokens[i + 4])
+                py3 = float(tokens[i + 5])
+                for p in cubic_bezier_points(4, (px0, py0), (px1, py1), (px2, py2), (px3, py3)):
+                    add_absolute_point_to_path(p[0], p[1], coords)
+                i += 6
+
+            elif command == 'l':
+                dx = float(tokens[i])
+                dy = float(tokens[i + 1])
+                add_relative_point_to_path(dx, dy, coords)
+                i += 2
+
+            elif command == 'L':
+                x = float(tokens[i])
+                y = float(tokens[i + 1])
+                add_absolute_point_to_path(x, y, coords)
+                i += 2
+
+            elif command == 'h':
+                dx = float(tokens[i])
+                add_relative_point_to_path(dx, 0, coords)
+                i += 1
+
+            elif command == 'H':
+                x = float(tokens[i]) 
+                add_absolute_point_to_path(x, coords[-1][1], coords)
+                i += 1
+
+            elif command == 'v':
+                dy = float(tokens[i])
+                add_relative_point_to_path(0, dy, coords)
+                i += 1
+
+            elif command == 'V':
+                y = float(tokens[i])
+                add_absolute_point_to_path(coords[-1][0], y, coords)
+                i += 1
+
+            elif command == 'z' or command == 'Z':
+                # Taxicab distance here is good enough.
+                # See the explanation in the docs above for why we're doing this.
+                if math.fabs(coords[0][0] - coords[-1][0]) + math.fabs(coords[0][1] - coords[-1][1]) < 0.01:
+                    coords = coords[:-1]
+                endpoint = (coords[0][0], coords[0][1])
+                ring = shapely.geometry.LinearRing(coords)
+                ring = shapely.affinity.affine_transform(ring, transform)
+                rings.append(ring)
+                coords = []
+
+            else:
+                raise AssertionError("Unexpected line command " + tokens[i])
+
+        if len(rings) == 1 and len(rings[0].coords) == 2:
+            return shapely.geometry.LineString(rings[0])
+
+        polygon = None
+        shell_orientation = None
+        if debug:
+            print("++ Start path {:s}".format(path_id))
+        for ring in rings:
+            subpolygon = shapely.geometry.polygon.orient(shapely.geometry.Polygon(ring))
+            if not polygon_is_topologically_sound(path_id, subpolygon):
+                return None
+            if shell_orientation is None:
+                shell_orientation = ring.is_ccw
+            ring_orientation = ring.is_ccw
+            if ring_orientation != shell_orientation:
+                if debug:
+                    print("  -- hole (orientation: {!r:s})".format(ring_orientation))
+                polygon = polygon.difference(subpolygon)
+            else:
+                if debug:
+                    print("  ++ shell (orientation: {!r:s})".format(ring_orientation))
+                if polygon is None:
+                    polygon = subpolygon
+                else:
+                    polygon = polygon.union(subpolygon) 
+        if debug:
+            print("++ End path: {:s}".format(str(polygon)))
+
+        return polygon
+
+    except:
+        traceback.print_exc()
+        assert False, ("Failed to parse path id {:s}. Path 'd' was: '{:s}'".format(path_id, path_string))
 
 
 def parse_font_size(style):
@@ -339,7 +515,10 @@ def parse_text_extents(text_element, trans):
     parent_style = text_element.get('style')
     if (style is not None and "font-family:'DejaVu Sans Mono'" not in style
         and parent_style is not None and "font-family:'DejaVu Sans Mono'" not in parent_style):
-        print("Warning: font must be DejaVu Sans Mono for " + text)
+        # print("Warning: font must be DejaVu Sans Mono for '{:s}' at {:s}. Assigning this text to"
+        #     " a signal will not be accurate.".format(
+        #     text, str(pt1)))
+        pass
     font_size = parse_font_size(style)
     parent_font_size = parse_font_size(parent_style)
     if font_size == 0:

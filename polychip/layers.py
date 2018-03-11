@@ -68,12 +68,14 @@ class InkscapeFile:
         multidiff(shapely.geometry.MultiPolygon): All the found diffusion polygons.
     """
     def __init__(self, root):
-        self.contacts = None
+        # self.contacts = None
         self.qnames = []
         self.snames = []
+        self.contact_array = []
         self.poly_array = []
         self.metal_array = []
         self.diff_array = []
+        self.multicontact = None
         self.multipoly = None
         self.multidiff = None
 
@@ -88,6 +90,7 @@ class InkscapeFile:
             Layer.SNAMES: self.to_screen_coords_transform_
         }
 
+        self.contact_paths = {}
         poly_paths = {}
         diff_paths = {}
         metal_paths = {}
@@ -106,59 +109,87 @@ class InkscapeFile:
             self.transform[y] = self.transform[y] @ t
         shapes = {}
 
-        shapes[Layer.CONTACTS] = root.findall(InkscapeFile.layer_path("Contacts") + "/svg:rect", namespaces)
+        shapes[Layer.CONTACTS] = root.findall(InkscapeFile.layer_path("Contacts") + "/svg:poly", namespaces)
+        shapes[Layer.CONTACTS] += root.findall(InkscapeFile.layer_path("Contacts") + "/svg:rect", namespaces)
         shapes[Layer.POLY] = root.findall(InkscapeFile.layer_path("Poly") + "/svg:path", namespaces)
+        shapes[Layer.POLY] += root.findall(InkscapeFile.layer_path("Poly") + "/svg:rect", namespaces)
         shapes[Layer.DIFF] = root.findall(InkscapeFile.layer_path("Diff") + "/svg:path", namespaces)
+        shapes[Layer.DIFF] += root.findall(InkscapeFile.layer_path("Diff") + "/svg:rect", namespaces)
         shapes[Layer.METAL] = root.findall(InkscapeFile.layer_path("Metal") + "/svg:path", namespaces)
+        shapes[Layer.METAL] += root.findall(InkscapeFile.layer_path("Metal") + "/svg:rect", namespaces)
         shapes[Layer.QNAMES] = root.findall(InkscapeFile.layer_path("QNames") + "/svg:text", namespaces)
         shapes[Layer.SNAMES] = root.findall(InkscapeFile.layer_path("SNames") + "/svg:text", namespaces)
 
-        print("Processing contact rectangles")
-        contact_array = []
-        contact_transform = self.transform[Layer.CONTACTS].to_shapely_transform()
-        for c in shapes[Layer.CONTACTS]:
-            pt = shapely.geometry.Point(
-                float(c.get('x')) + float(c.get('width'))/2,
-                float(c.get('y')) + float(c.get('height'))/2)
-            pt = shapely.affinity.affine_transform(pt, contact_transform)
-            contact_array.append(pt)
-        self.contacts = shapely.geometry.MultiPoint(contact_array)
+        # contact_array = []
+        # contact_transform = self.transform[Layer.CONTACTS].to_shapely_transform()
+        # for c in shapes[Layer.CONTACTS]:
+        #     pt = shapely.geometry.Point(
+        #         float(c.get('x')) + float(c.get('width'))/2,
+        #         float(c.get('y')) + float(c.get('height'))/2)
+        #     pt = shapely.affinity.affine_transform(pt, contact_transform)
+        #     contact_array.append(pt)
+        # self.contacts = shapely.geometry.MultiPoint(contact_array)
 
-        print("{:d} contacts".format(len(self.contacts)))
+        # print("{:d} contacts".format(len(self.contacts)))
 
-        print("Processing poly paths")
+        print("Processing {:d} contact paths".format(len(shapes[Layer.CONTACTS])))
+        for p in shapes[Layer.CONTACTS]:
+            self.contact_paths['c_' + p.get('id')] = svgelement_to_shapely_polygon(p, self.transform[Layer.CONTACTS])
+
+        print("Processing {:d} poly paths".format(len(shapes[Layer.POLY])))
         for p in shapes[Layer.POLY]:
-            poly_paths['p_' + p.get('id')] = svgpath_to_shapely_path(p, self.transform[Layer.POLY])
-        print("Processing diff paths")
+            poly_paths['p_' + p.get('id')] = svgelement_to_shapely_polygon(p, self.transform[Layer.POLY])
+
+        print("Processing {:d} diff paths".format(len(shapes[Layer.DIFF])))
         for p in shapes[Layer.DIFF]:
-            diff_paths['d_' + p.get('id')] = svgpath_to_shapely_path(p, self.transform[Layer.DIFF])
-        print("Processing metal paths")
+            diff_paths['p_' + p.get('id')] = svgelement_to_shapely_polygon(p, self.transform[Layer.DIFF])
+
+        print("Processing {:d} metal paths".format(len(shapes[Layer.METAL])))
         for p in shapes[Layer.METAL]:
-            metal_paths['m_' + p.get('id')] = svgpath_to_shapely_path(p, self.transform[Layer.METAL])
+            metal_paths['p_' + p.get('id')] = svgelement_to_shapely_polygon(p, self.transform[Layer.METAL])
+
         print("Processing qnames text")
         for t in shapes[Layer.QNAMES]:
             text, extents = parse_shapely_text(t, self.transform[Layer.QNAMES])
             self.qnames.append(Label(text, extents))
+
         print("Processing snames text")
         for t in shapes[Layer.SNAMES]:
             text, extents = parse_shapely_text(t, self.transform[Layer.SNAMES])
             self.snames.append(Label(text, extents))
 
-        self.multidiff = coerce_multipoly(shapely.ops.unary_union(diff_paths.values()))
+        print("Merging overlapping sections. Before merge:")
+        print("{:d} contacts".format(len(self.contact_paths)))
+        print("{:d} diffs".format(len(diff_paths)))
+        print("{:d} polys".format(len(poly_paths)))
+        print("{:d} metals".format(len(metal_paths)))
+        print("After merging:")
+        # print(diff_paths['p_rect10018'])
+
+        self.multicontact = coerce_multipoly(shapely.ops.unary_union(
+            [p for p in self.contact_paths.values() if p is not None]))
+        self.contact_array = list(self.multicontact.geoms)
+        list.sort(self.contact_array, key = functools.cmp_to_key(InkscapeFile.poly_cmp))
+        print("{:d} contacts".format(len(self.contact_array)))
+
+        self.multidiff = coerce_multipoly(shapely.ops.unary_union(
+            [p for p in diff_paths.values() if p is not None]))
         self.diff_array = list(self.multidiff.geoms)
         list.sort(self.diff_array, key = functools.cmp_to_key(InkscapeFile.poly_cmp))
+        print("{:d} diffs".format(len(self.diff_array)))
 
-        self.multipoly = coerce_multipoly(shapely.ops.unary_union(poly_paths.values()))
+        self.multipoly = coerce_multipoly(shapely.ops.unary_union(
+            [p for p in poly_paths.values() if p is not None]))
         self.poly_array = list(self.multipoly.geoms)
         list.sort(self.poly_array, key = functools.cmp_to_key(InkscapeFile.poly_cmp))
+        print("{:d} polys".format(len(self.poly_array)))
 
-        multimetal = coerce_multipoly(shapely.ops.unary_union(metal_paths.values()))
+        multimetal = coerce_multipoly(shapely.ops.unary_union(
+            [p for p in metal_paths.values() if p is not None]))
         self.metal_array = list(multimetal.geoms)
         list.sort(self.metal_array, key = functools.cmp_to_key(InkscapeFile.poly_cmp))
-
-        print("{:d} diffs".format(len(self.diff_array)))
         print("{:d} metals".format(len(self.metal_array)))
-        print("{:d} polys".format(len(self.poly_array)))
+
         print("{:d} qnames".format(len(self.qnames)))
         print("{:d} snames".format(len(self.snames)))
 
