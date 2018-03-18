@@ -1,6 +1,8 @@
 import sys
 import unittest
 from polychip import *
+from gates import *
+
 
 class PolychipTestCase(unittest.TestCase):
     @classmethod
@@ -147,7 +149,7 @@ class PolychipTestCase(unittest.TestCase):
     def do_test(self, testname):
         key = testname[5:]
         filename = "test/" + key + ".svg"
-        netlist, qdata = file_to_netlist(filename)
+        netlist, _, _ = file_to_netlist(filename)
         self.assertEqual(self.test_dict[key]['expected'], netlist)
         # self.assertListsEqualInAnyOrder(self.test_dict[key]['expected'], netlist)
 
@@ -198,6 +200,140 @@ class PolychipTestCase(unittest.TestCase):
         key = testname[5:]
         filename = "test/" + key + ".svg"
         self.assertRaises(AssertionError, file_to_netlist, filename)
+
+    def test_find_parallel_qs(self):
+        filename = "test/polychip_test_parallel_qs.svg"
+        netlist, qs, _ = file_to_netlist(filename)
+        gates = Gates(netlist, qs)
+        gates.find_all_the_things()
+
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.qs), 1)
+        q = only(gates.qs)
+        self.assertIs(type(q), ParallelTransistor)
+        self.assertEqual(q.num_qs(), 4)
+
+    def test_find_inverter(self):
+        filename = "test/polychip_test_inverter.svg"
+        netlist, qs, _ = file_to_netlist(filename)
+        gates = Gates(netlist, qs)
+        gates.find_all_the_things()
+
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 1)
+        inv = only(gates.nors)
+        self.assertEqual(set(inv.inputs), {"IN"})
+        self.assertEqual(inv.output, "OUT")
+        self.assertEqual(inv.num_qs(), 2)
+        self.assertEqual(len(gates.qs), 0)
+
+    def test_find_2nor(self):
+        filename = "test/polychip_test_2nor.svg"
+        netlist, qs, _ = file_to_netlist(filename)
+        gates = Gates(netlist, qs)
+        gates.find_all_the_things()
+
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 1)
+        nor = only(gates.nors)
+        self.assertEqual(set(nor.inputs), {"IN1", "IN2"})
+        self.assertEqual(nor.output, "OUT")
+        self.assertEqual(nor.num_qs(), 3)
+        self.assertEqual(len(gates.qs), 0)
+
+    def test_find_2mux(self):
+        filename = "test/polychip_test_2mux.svg"
+        netlist, qs, _ = file_to_netlist(filename)
+        gates = Gates(netlist, qs)
+        gates.find_all_the_things()
+
+        self.assertEqual(len(gates.muxes), 1)
+        self.assertEqual(len(gates.nors), 0)
+        mux = only(gates.muxes)
+        self.assertEqual(set(mux.selected_inputs), {"X0", "X1"})
+        self.assertEqual(set(mux.inputs), {"S0", "S1"})
+        self.assertEqual(mux.output, "Y")
+        self.assertEqual(mux.num_qs(), 2)
+        self.assertEqual(len(gates.qs), 2)
+
+    def test_find_power_mux(self):
+        filename = "test/polychip_test_power_mux.svg"
+        netlist, qs, _ = file_to_netlist(filename)
+        gates = Gates(netlist, qs)
+        gates.find_all_the_things()
+
+        self.assertEqual(len(gates.muxes), 1)
+        self.assertEqual(len(gates.nors), 0)
+        mux = only(gates.muxes)
+        self.assertIs(type(mux), PowerMultiplexer)
+        self.assertEqual(set(mux.selected_inputs), {"VCC", "GND"})
+        self.assertEqual(set(mux.inputs), {"S0", "S1"})
+        self.assertEqual(mux.output, "Y")
+        self.assertEqual(mux.num_qs(), 2)
+        self.assertEqual(len(gates.qs), 0)
+
+    def test_find_power_inverter(self):
+        filename = "test/polychip_test_power_inverter.svg"
+        netlist, qs, _ = file_to_netlist(filename)
+        gates = Gates(netlist, qs)
+        gates.find_all_the_things()
+
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 1)
+        inv = only(gates.nors)
+        self.assertIs(type(inv), PowerNorGate)
+        self.assertEqual(set(inv.inputs), {"IN"})
+        self.assertEqual(inv.output, "OUT")
+        self.assertEqual(inv.num_qs(), 4)
+        self.assertEqual(len(gates.qs), 0)
+
+    def test_find_power_2nor(self):
+        filename = "test/polychip_test_power_2nor.svg"
+        netlist, qs, _ = file_to_netlist(filename)
+        gates = Gates(netlist, qs)
+        gates.find_all_the_things()
+
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 1)
+        nor = only(gates.nors)
+        self.assertIs(type(nor), PowerNorGate)
+        self.assertEqual(set(nor.inputs), {"IN1", "IN2"})
+        self.assertEqual(nor.output, "OUT")
+        self.assertEqual(nor.num_qs(), 6)
+        self.assertEqual(len(gates.qs), 0)
+
+    def test_find_tristate_inverter(self):
+        filename = "test/polychip_test_tristate_inverter.svg"
+        netlist, qs, _ = file_to_netlist(filename)
+        gates = Gates(netlist, qs)
+        gates.find_all_the_things()
+
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 0)
+        self.assertEqual(len(gates.tristate_inverters), 1)
+        zinv = only(gates.tristate_inverters)
+        self.assertEqual(zinv.input(), "IN")
+        self.assertEqual(zinv.output, "OUT")
+        self.assertEqual(zinv.noe, "/OE")
+        self.assertEqual(zinv.num_qs(), 10)
+        self.assertEqual(len(gates.qs), 0)
+
+    def test_find_tristate_buffer(self):
+        filename = "test/polychip_test_tristate_buffer.svg"
+        netlist, qs, _ = file_to_netlist(filename)
+        gates = Gates(netlist, qs)
+        gates.find_all_the_things()
+
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 0)
+        self.assertEqual(len(gates.tristate_buffers), 1)
+        zbuff = only(gates.tristate_buffers)
+        self.assertEqual(zbuff.input(), "IN")
+        self.assertEqual(zbuff.output, "OUT")
+        self.assertEqual(zbuff.noe, "/OE")
+        self.assertEqual(zbuff.num_qs(), 10)
+        self.assertEqual(len(gates.qs), 0)
+
 
 if __name__ == '__main__':
     unittest.main()

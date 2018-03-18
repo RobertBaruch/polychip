@@ -78,6 +78,7 @@ class InkscapeFile:
         self.multicontact = None
         self.multipoly = None
         self.multidiff = None
+        self.multimetal = None
 
         self.to_screen_coords_transform_ = self.extract_screen_transform(root)
 
@@ -184,9 +185,9 @@ class InkscapeFile:
         list.sort(self.poly_array, key = functools.cmp_to_key(InkscapeFile.poly_cmp))
         print("{:d} polys".format(len(self.poly_array)))
 
-        multimetal = coerce_multipoly(shapely.ops.unary_union(
+        self.multimetal = coerce_multipoly(shapely.ops.unary_union(
             [p for p in metal_paths.values() if p is not None]))
-        self.metal_array = list(multimetal.geoms)
+        self.metal_array = list(self.multimetal.geoms)
         list.sort(self.metal_array, key = functools.cmp_to_key(InkscapeFile.poly_cmp))
         print("{:d} metals".format(len(self.metal_array)))
 

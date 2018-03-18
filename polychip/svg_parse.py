@@ -9,6 +9,7 @@ import traceback
 
 from lxml import etree
 
+
 namespaces = {'inkscape': 'http://www.inkscape.org/namespaces/inkscape',
               'svg': 'http://www.w3.org/2000/svg'}
 
@@ -34,7 +35,6 @@ class Transform(object):
         self.e = float(e)
         self.f = float(f)
 
-
     def __matmul__(self, t2):
         """Multiplies this transform by t2. Triggered by the Python 3.5 @-operator.
 
@@ -52,7 +52,6 @@ class Transform(object):
                 t1.b * t2.e + t1.d * t2.f + t1.f)
         raise TypeError("unsupported operand type(s) for @: 'Transform' and '{:s}'".format(
             str(type(t2))))
-
 
     def __imatmul__(self, t2):
         """Multiplies this transform in-place by t2. Triggered by the Python 3.5 @=-operator.
@@ -75,23 +74,19 @@ class Transform(object):
         raise TypeError("unsupported operand type(s) for @=: 'Transform' and '{:s}'".format(
             str(type(t2))))
 
-
     def __repr__(self):
         """Returns the Python representation of this transform."""
         return "Transform({:f}, {:f}, {:f}, {:f}, {:f}, {:f})".format(
             self.a, self.b, self.c, self.d, self.e, self.f)
 
-
     def to_shapely_transform(self):
         """Returns a transform suitable for use with shapely."""
         return [self.a, self.c, self.b, self.d, self.e, self.f]
-
 
     @staticmethod
     def identity():
         """Returns a transform that does nothing."""
         return Transform(1, 0, 0, 1, 0, 0)
-
 
     @staticmethod
     def translate(x, y):
@@ -132,7 +127,6 @@ class Transform(object):
             t @= Transform.parse_(splits)
             splits = splits[2:]
         return t
-
 
     @staticmethod
     def parse_(splits):
@@ -253,9 +247,11 @@ def polygon_is_topologically_sound(id, polygon):
         leftovers = bounding_box.difference(polygon)
         return True
     except shapely.errors.TopologicalError:
-        assert False, ("Warning: Skipping path {:s} which starts at {:s} because it is topologically "
-            "unsound (e.g. crosses itself).".format(
-                id, str((polygon.exterior.coords[0][0], polygon.exterior.coords[0][1]))))
+        pass
+
+    raise AssertionError("Warning: Skipping path {:s} which starts at {:s} because it is topologically "
+        "unsound (e.g. crosses itself).".format(
+            id, str((polygon.exterior.coords[0][0], polygon.exterior.coords[0][1]))))
 
 def cubic_bezier_point(t, p0, p1, p2, p3):
     """Returns the point along the bezier curve corresponding to the parameter t.
@@ -281,9 +277,13 @@ def cubic_bezier_point(t, p0, p1, p2, p3):
 def cubic_bezier_points(n, p0, p1, p2, p3):
     """Returns n points along the cubic bezier curve.
 
-    The points are not evenly spaced, but they are in parameter space (t):
+    The points are not evenly spaced, but they are in parameter space (t).
 
-    B(t) = p0*(1-t)^3 + 3p1*t(1-t)^2 + 3p2*t^2(1-t) + p3 * t^3 (0 <= t <= 1)
+    Let f(t, n) = t^n * (1-t)^(3-n). And let P(x) be the points defining the
+    Bezier curve, where P(0) is the starting point, P(1) is the first control
+    point, P(2) is the second control point, and P(3) is the end point. Then:
+
+    B(t) = P(0)f(t, 0) + 3P(1)f(t, 1) + 3P(2)f(t, 2) + P(3)f(t, 3) (0 <= t <= 1)
 
     Args:
         n (int): The number of points to return. Minimum 2 (i.e. the endpoints).
@@ -302,13 +302,13 @@ def cubic_bezier_points(n, p0, p1, p2, p3):
 def svgpath_to_shapely_path(element, trans, debug = False):
     """Converts an svg <path> element into a shapely.geometry.Polygon.
 
-    Only supports moveto, lineto, vertical, and horizontal. No curves!
+    Only supports moveto, lineto, vertical, horizontal, and cubic Beziers.
 
     It seems that an svg path starts with a shell, which may be clockwise or counter-clockwise.
     Then, for every following subpath, it is another shell if it has the same orientation, or
     a hole if it has the opposite orientation.
 
-    For consistency, we modify the orientations so thatshells are always counter-clockwise
+    For consistency, we modify the orientations so that shells are always counter-clockwise
     (right-hand rule -> positive area) and holes are clockwise (right-hand rule -> negative area).
 
     When a path is explicity closed (i.e. a -> b -> c -> a) and the points are relative moves, 
@@ -478,7 +478,7 @@ def svgpath_to_shapely_path(element, trans, debug = False):
 
     except:
         traceback.print_exc()
-        assert False, ("Failed to parse path id {:s}. Path 'd' was: '{:s}'".format(path_id, path_string))
+        raise AssertionError("Failed to parse path id {:s}. Path 'd' was: '{:s}'".format(path_id, path_string))
 
 
 def parse_font_size(style):

@@ -9,7 +9,11 @@ from enum import Enum, unique
 from svg_parse import *
 from layers import InkscapeFile
 from layers import coerce_multipoly
+from gates import Transistor
 from gates import Gates
+from gates import is_power_name
+from gates import is_ground_name
+from sch import *
 
 
 # Text must be Djvu Sans Mono
@@ -38,79 +42,6 @@ class Contact(object):
         self.diff = None
 
 
-class Transistor(object):
-    """Represents a transistor.
-
-    For consistency, the electrode0 must alway have lower x (or lower y if x is equal) than
-    electrode1 (see InkscapeFile.poly_cmp for details of this comparison).
-
-    Args:
-    Attributes:
-        gate_shape (shapely.geometry.Polygon): The polygon outlining the transistor's gate. 
-        gate (int): The index into the InkscapeFile's poly_array that connects to this transistor's gate.
-        electrode0 (int): The index into the InkscapeFile's diff_array that connects to one
-            side of this transistor.
-        electrode1 (int): The index into the InkscapeFile's diff_array that connects to the other
-            side of this transistor.
-        name (str): The name of the transistor, if found on the QNames layer, otherwise None.
-        gate_net (str): The name of the net the gate is connected to.
-        electrode0_net (str): The name of the net electrode 0 is connected to.
-        electrode1_net (str): The name of the net electrode 1 is connected to.
-    """
-    def __init__(self, gate_shape, gate, electrode0, electrode1, name):
-        self.gate_shape = gate_shape
-        self.gate = gate
-        self.electrode0 = electrode0
-        self.electrode1 = electrode1
-        self.name = name
-        self.centroid = self.gate_shape.centroid
-        self.gate_net = None
-        self.electrode0_net = None
-        self.electrode1_net = None
-
-    def __hash__(self):
-        return hash(self.name)
-
-    def __repr__(self):
-        return "Transistor({:s} @ {:f}, {:f})".format(self.name, self.centroid.x, self.centroid.y)
-
-    def as_dict(self):
-        return {
-            'name': self.name,
-            'gate': {
-                'x': self.centroid.x,
-                'y': self.centroid.y,
-                'net': self.gate_net
-            },
-            'e0_net': self.electrode0_net,
-            'e1_net': self.electrode1_net
-        }
-
-    def nongrounded_electrode_net(self):
-        """Returns the first electrode net not GND, or None if both are grounded."""
-        if not self.electrode0_net.startswith('GND') and not self.electrode0_net.startswith('VSS'):
-            return self.electrode0_net
-        if not self.electrode1_net.startswith('GND') and not self.electrode1_net.startswith('VSS'):
-            return self.electrode1_net
-        return None
-
-    def nonvcc_electrode_net(self):
-        """Returns the first electrode net not VCC, or None if both are grounded."""
-        if not self.electrode0_net.startswith('VCC') and not self.electrode0_net.startswith('VDD'):
-            return self.electrode0_net
-        if not self.electrode1_net.startswith('VCC') and not self.electrode1_net.startswith('VDD'):
-            return self.electrode1_net
-        return None
-
-    def is_grounding(self):
-        return (self.electrode0_net.startswith('GND') or self.electrode0_net.startswith('VSS') or
-            self.electrode1_net.startswith('GND') or self.electrode1_net.startswith('VSS'))
-
-    def is_powering(self):
-        return (self.electrode0_net.startswith('VCC') or self.electrode0_net.startswith('VDD') or
-            self.electrode1_net.startswith('VCC') or self.electrode1_net.startswith('VDD'))
-
-
 @unique
 class Type(Enum):
     """ Types of entities."""
@@ -137,7 +68,6 @@ def calculate_contacts(drawing):
         contact.diff = next( (i for i, p in enumerate(drawing.diff_array) if p.intersects(c)), None)
         contact.poly = next( (i for i, p in enumerate(drawing.poly_array) if p.intersects(c)), None)
         if contact.metal is not None and contact.diff is not None and contact.poly is not None:
-            print("Avoided metal contact for {:s}".format(contact.path_id))
             contact.metal = None
         count = 0
         contacted = "Isolated"
@@ -232,14 +162,48 @@ def find_transistors_and_number_diffs(drawing):
     return qs
 
 
-def file_to_netlist(file):
+def get_polygon(nodetype, nodename, drawing):
+    if nodetype == Type.DIFF:
+        return drawing.diff_array[nodename]
+    elif nodetype == Type.POLY:
+        return drawing.poly_array[nodename]
+    elif nodetype == Type.METAL:
+        return drawing.metal_array[nodename]
+
+def print_node_path(nodes, drawing):
+    if len(nodes) == 1:
+        nodetype, nodename = next(nodes)
+        polygon = get_polygon(nodetype, nodename, drawing)
+        print("  {:s} @ {:s}".format(nodetype, str(polygon.representative_point())))
+        return
+
+    print("{")
+    prev_nodetype = None
+    prev_nodename = None
+    for nodetype, nodename in nodes:
+        if prev_nodetype is None:
+            prev_nodetype = nodetype
+            prev_nodename = nodename
+            continue
+        polygon = get_polygon(nodetype, nodename, drawing)
+        prev_polygon = get_polygon(prev_nodetype, prev_nodename, drawing)
+        print("  {:s} @ {:s}".format(
+            nodetype, str(polygon.intersection(prev_polygon).representative_point())))
+        prev_nodetype = nodetype
+        prev_nodename = nodename
+    print("}")
+        
+
+def file_to_netlist(file, print_netlist, print_qs):
     """Converts an Inkscape SVG file to a netlist and transistor list.
 
     Args:
         file (str): The filename of the Inkscape SVG file to load.
+        print_netlist (bool): Whether to print the netlist at the end.
+        print_qs (bool): Whether to print the transistor locations at the end.
 
     Returns:
-        (nets, qs):
+        (nets, qs, drawing):
             nets ([(netname, net)]):
                 netname (str): The name of the net, or None if unnamed.
                 net ({net_node}):
@@ -247,6 +211,7 @@ def file_to_netlist(file):
                         type (Type): the transistor connection (E0, E1, or GATE).
                         qname (str): the name of the transistor
             qs ([Transistor]): All the transistors.
+            drawing (InkscapeFile): The InkscapeFile.
     """
     root = parse_inkscape_svg(file)
     drawing = InkscapeFile(root)
@@ -313,7 +278,7 @@ def file_to_netlist(file):
         G.add_edge((Type.E0, q.name), (Type.DIFF, q.electrode0))
         G.add_edge((Type.E1, q.name), (Type.DIFF, q.electrode1))
 
-    # All signals with the same name are connected, too, even if not physically.
+    # All signals with the same name are connected, even if not physically.
     for sname, nodes in sig_multimap.items():
         if len(nodes) == 1:
             continue
@@ -330,16 +295,36 @@ def file_to_netlist(file):
 
     nets = {}
     anonymous_net = 0
-    for cc in nx.connected_components(G):
-        net = {x for x in cc}
+    # net ({(Type, name)}): A connected component (the set of nodes connected to each other)
+    for net in nx.connected_components(G):
         netname = None
-        for c in net:
-            if c[0] in sigs and sigs[c[0]][c[1]] is not None:
-                if netname is not None and netname != sigs[c[0]][c[1]]:
+        signames = set()
+        for nodetype, nodename in net:
+            if nodetype in sigs and sigs[nodetype][nodename] is not None:
+                node_signame = sigs[nodetype][nodename]
+                signames.add(node_signame)
+                if netname is not None and netname != node_signame:
                     print("Warning: component {:s} is named '{:s}' but is connected to '{:s}'".format(
-                        str(c), sigs[c[0]][c[1]], netname))
+                        str((nodetype, nodename)), node_signame, netname))
                 else:
-                    netname = sigs[c[0]][c[1]]
+                    netname = node_signame
+
+        # power/ground short detection
+        has_power_node = any((is_power_name(n) for n in signames))
+        has_ground_node = any((is_ground_name(n) for n in signames))
+        if has_power_node and has_ground_node:
+            power_sig_name = next((n for n in signames if is_power_name(n)))
+            ground_sig_name = next((n for n in signames if is_ground_name(n)))
+            power_node = next((n for n in sig_multimap[power_sig_name]))
+            ground_node = next((n for n in sig_multimap[ground_sig_name]))
+            node_path = nx.shortest_path(G, power_node, ground_node)
+            print("FATAL: There's a short between power and ground. Further analysis is pointless.")
+            print("Here is a path from power to ground:")
+            print(node_path)
+            print('----')
+            print_node_path(node_path, drawing)
+            sys.exit(1)
+
         component_net = {x for x in net if x[0] == Type.GATE or x[0] == Type.E0 or x[0] == Type.E1}
         if netname is None:
             netname = '__net__{:d}'.format(anonymous_net)
@@ -354,10 +339,12 @@ def file_to_netlist(file):
         if len(component_net) > 0:
             nets[netname] = component_net
 
-    print('Netlist: ' + str(nets))
-    print('Transistors:')
-    pprint.pprint([q.as_dict() for q in qs])
-    return (nets, qs)
+    if print_netlist:
+        print(nets)
+    if print_qs:
+        print(qs)
+
+    return (nets, qs, drawing)
 
 
 def nmos_nand_iter(nets, qs):
@@ -403,17 +390,43 @@ def nmos_nand_iter(nets, qs):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Polychip.')
-    parser.add_argument('file', metavar='<file>', type=argparse.FileType('r'), nargs=1,
-                        help='input Inkscape SVG file')
+    parser = argparse.ArgumentParser(description="Polychip, a program to help recognize transistors and "
+        "gates in an Inkscape file traced from an NMOS integrated circuit.")
+    parser.add_argument("file", metavar="<file>", type=argparse.FileType('r'), nargs=1,
+                        help="input Inkscape SVG file")
+    parser.add_argument("--sch", action="store_true",
+                        help="whether to generate a KiCAD .sch file")
+    parser.add_argument("--nets", action="store_true",
+                        help="whether to print the netlist")
+    parser.add_argument("--qs", action="store_true",
+                        help="whether to print the transistor locations")
     args = parser.parse_args()
 
-    nets, qs = file_to_netlist(args.file[0])
+    nets, qs, drawing = file_to_netlist(args.file[0], args.nets, args.qs)
     gates = Gates(nets, qs)
 
+    print("{:d} total transistors".format(len(gates.qs)))
+
+    gates.find_all_the_things()
+
+    print("Found {:d} muxes (total {:d} qs)".format(len(gates.muxes),
+        sum(g.num_qs() for g in gates.muxes)))
+    for i in range(2, 10):
+        gs = {g for g in gates.muxes if len(g.selected_inputs) == i}
+        print("  {:d} {:d}-muxes".format(len(gs), i))
+
     for i in range(1, 10):
-        gs = gates.nmos_nor(i)
-        if len(gs) == 0:
-            continue
-        print("Found {:d} {:d}-input NOR gates (total {:d} qs)".format(len(gs), i,
-            sum(g.num_qs() for g in gs)))
+        nors = {nor for nor in gates.nors if len(nor.inputs) == i}
+        print("Found {:d} {:d}-input NOR gates (total {:d} qs)".format(len(nors), i,
+            sum(g.num_qs() for g in nors)))
+
+    print("Found {:d} tristate inverters (total {:d} qs)".format(len(gates.tristate_inverters),
+        sum(g.num_qs() for g in gates.tristate_inverters)))
+    print("Found {:d} tristate buffers (total {:d} qs)".format(len(gates.tristate_buffers),
+        sum(g.num_qs() for g in gates.tristate_buffers)))
+
+    print("{:d} unallocated transistors".format(len(gates.qs)))
+
+    if args.sch:
+        inkscape_to_sch_transform = sch_size_transform(drawing)
+        write_sch_file("polychip.sch", gates, inkscape_to_sch_transform)

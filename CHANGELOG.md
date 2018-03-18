@@ -1,3 +1,12 @@
+# v0.4 (18 Mar 2018)
+* Preliminary KiCAD schematic output (gates and transistors only, no wires yet).
+* Detects if power is shorted to ground, refuses analysis past that point.
+* More gate recognition:
+    * Multiplexers and power multiplexers are now found.
+    * Tristate inverters and buffers are now found.
+    * Parallel transistors that are connected to power or ground are now found and treated as single transistors for gate recognition.
+* Added tests for gate recognition.
+
 # v0.3 (10 Mar 2018)
 * Contacts may now also be polygons.
 * Diff, poly, and metal may now also be rectangles.
