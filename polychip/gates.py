@@ -4,10 +4,10 @@ import networkx as nx
 import functools
 import pprint
 
-def is_power_name(name):
+def is_power_net(name):
     return name.startswith('VCC') or name.startswith('VDD')
 
-def is_ground_name(name):
+def is_ground_net(name):
     return name.startswith('VSS') or name.startswith('GND')
 
 class Transistor(object):
@@ -60,17 +60,17 @@ class Transistor(object):
 
     def nongrounded_electrode_net(self):
         """Returns the first electrode net not ground, or None if both are ground."""
-        if not is_ground_name(self.electrode0_net):
+        if not is_ground_net(self.electrode0_net):
             return self.electrode0_net
-        if not is_ground_name(self.electrode1_net):
+        if not is_ground_net(self.electrode1_net):
             return self.electrode1_net
         return None
 
     def nonvcc_electrode_net(self):
         """Returns the first electrode net not power, or None if both are power."""
-        if not is_power_name(self.electrode0_net):
+        if not is_power_net(self.electrode0_net):
             return self.electrode0_net
-        if not is_power_name(self.electrode1_net):
+        if not is_power_net(self.electrode1_net):
             return self.electrode1_net
         return None
 
@@ -82,10 +82,10 @@ class Transistor(object):
         return self.electrode1_net
 
     def is_grounding(self):
-        return is_ground_name(self.electrode0_net) or is_ground_name(self.electrode1_net)
+        return is_ground_net(self.electrode0_net) or is_ground_net(self.electrode1_net)
 
     def is_powering(self):
-        return is_power_name(self.electrode0_net) or is_power_name(self.electrode1_net)
+        return is_power_net(self.electrode0_net) or is_power_net(self.electrode1_net)
 
 
 class ParallelTransistor(Transistor):
@@ -142,6 +142,18 @@ class Gate(object):
         }
 
 
+class PassTransistor(Gate):
+    """A pass transistor has no powering elements on either of its electrodes."""
+    def __init__(self, q):
+        super().__init__(q, None, [q.electrode0_net, q.electrode1_net], {q})
+
+
+class Pulldown(Gate):
+    """A resistor to ground, formed by an NMOS transistor."""
+    def __init__(self, q):
+        super().__init__(None, None, [q.nongrounded_electrode_net()], {q})
+
+
 class Multiplexer(Gate):
     """
     Attributes:
@@ -164,10 +176,9 @@ class Multiplexer(Gate):
 
 
 class PowerMultiplexer(Multiplexer):
-    """A mux that selects only between power and ground, and not necessary with only two inputs.
+    """A mux that selects only between power and ground, and not necessarily with only two inputs.
     """
     def __init__(self, mux):
-        print("power mux detected")
         super().__init__(mux.output, mux.qs)
         qs = list(mux.qs)
         self.high_inputs = [q.gate_net for q in qs if q.is_powering()]
@@ -310,17 +321,21 @@ class Gates(object):
         self.powered_qs = {q for q in qs if q.is_powering()}
         self.nmos_resistor_qs = {q for q in self.nmos_resistor_iter()}
         self.pulled_up_nets = {q.nonvcc_electrode_net() for q in self.nmos_resistor_qs}
-        self.power_nets = {net for net in self.nets.keys() if is_power_name(net)}
-        self.ground_nets = {net for net in self.nets.keys() if is_ground_name(net)}
+        self.power_nets = {net for net in self.nets.keys() if is_power_net(net)}
+        self.ground_nets = {net for net in self.nets.keys() if is_ground_net(net)}
         # Nets with definitive logic values.
         self.logic_nets = self.pulled_up_nets | self.power_nets | self.ground_nets
 
+        self.pulldowns = set()
+        self.pass_qs = set()
         self.muxes = set()
         self.nors = set()
         self.tristate_inverters = set()
         self.tristate_buffers = set()
 
     def find_all_the_things(self):
+        self.find_pulldowns()
+        self.find_pass_transistors()
         self.find_power_qs()
         self.find_muxes()
         for i in range(1, 10):
@@ -419,6 +434,22 @@ class Gates(object):
             for qq in q.component_qs:
                 self.remove_q(qq)
             self.add_q(q)
+
+    def find_pulldowns(self):
+        self.pulldowns = {Pulldown(q) for q in self.grounding_qs if is_ground_net(q.gate_net)}
+        for g in self.pulldowns:
+            self.remove_q(only(g.qs))
+
+    def find_pass_transistors(self):
+        print("Logic nets: " + str(self.logic_nets))
+        print("NMOS resistors: " + str([q.name for q in self.nmos_resistor_qs]))
+        for q in self.qs:
+            if q.electrode1_net not in self.logic_nets and q.electrode0_net not in self.logic_nets:
+                print("PassQ {:s} electrode0_net {:s} electrode1_net {:s}".format(q.name, q.electrode0_net, q.electrode1_net))
+        self.pass_qs = {PassTransistor(q) for q in self.qs if (
+            q.electrode1_net not in self.logic_nets and q.electrode0_net not in self.logic_nets)}
+        for g in self.pass_qs:
+            self.remove_q(only(g.qs))
 
     def nmos_resistor_iter(self):
         """Generator for finding nmos resistors.
@@ -542,9 +573,12 @@ class Gates(object):
 
         # Go through the muxes fed by pairs of nors that also have one common input (/oe).
         for mux in muxes:
+            print("Mux @ {:s}".format(str(mux.output_power_q.centroid)))
             # The mux must be fed by nor2s.
             if not all(input in nor2_by_output for input in mux.inputs):
                 continue
+
+            print("Mux passes A")
 
             # The nor2s must have one common input (/oe).
             high_nor = nor2_by_output[only(mux.high_inputs)]
@@ -555,16 +589,22 @@ class Gates(object):
             if len(common_inputs) != 1:
                 continue
 
+            print("Mux passes B")
+
             # The low nor's other input must be the output of an inverter.
             low_nor_input = only(low_nor_inputs - common_inputs)
             inv = invs_by_output.get(low_nor_input)
             if inv is None:
                 continue
 
+            print("Mux passes C")
+            
             # The inverter's input must also be the high nor's other input.
             if inv.input() != only(high_nor_inputs - common_inputs):
                 continue
 
+            print("Mux passes D")
+            
             # TODO: make sure the thing is self-contained: the inverter's output
             # feeds no other input, and the nors' outputs feed nothing other than the
             # mux. This requires an output -> gate/q map.

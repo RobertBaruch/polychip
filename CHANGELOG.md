@@ -1,3 +1,7 @@
+# v0.4.1 (19 Mar 2018)
+* Fixes bug where non-rectangular contacts weren't being recognized.
+* Preliminary recognition of pulldown and pass transistors.
+
 # v0.4 (18 Mar 2018)
 * Preliminary KiCAD schematic output (gates and transistors only, no wires yet).
 * Detects if power is shorted to ground, refuses analysis past that point.
@@ -6,6 +10,7 @@
     * Tristate inverters and buffers are now found.
     * Parallel transistors that are connected to power or ground are now found and treated as single transistors for gate recognition.
 * Added tests for gate recognition.
+* Adds --nets and --qs options to print netlist and transistor list.
 
 # v0.3 (10 Mar 2018)
 * Contacts may now also be polygons.

@@ -11,8 +11,8 @@ from layers import InkscapeFile
 from layers import coerce_multipoly
 from gates import Transistor
 from gates import Gates
-from gates import is_power_name
-from gates import is_ground_name
+from gates import is_power_net
+from gates import is_ground_net
 from sch import *
 
 
@@ -194,7 +194,7 @@ def print_node_path(nodes, drawing):
     print("}")
         
 
-def file_to_netlist(file, print_netlist, print_qs):
+def file_to_netlist(file, print_netlist=False, print_qs=False):
     """Converts an Inkscape SVG file to a netlist and transistor list.
 
     Args:
@@ -310,11 +310,11 @@ def file_to_netlist(file, print_netlist, print_qs):
                     netname = node_signame
 
         # power/ground short detection
-        has_power_node = any((is_power_name(n) for n in signames))
-        has_ground_node = any((is_ground_name(n) for n in signames))
+        has_power_node = any((is_power_net(n) for n in signames))
+        has_ground_node = any((is_ground_net(n) for n in signames))
         if has_power_node and has_ground_node:
-            power_sig_name = next((n for n in signames if is_power_name(n)))
-            ground_sig_name = next((n for n in signames if is_ground_name(n)))
+            power_sig_name = next((n for n in signames if is_power_net(n)))
+            ground_sig_name = next((n for n in signames if is_ground_net(n)))
             power_node = next((n for n in sig_multimap[power_sig_name]))
             ground_node = next((n for n in sig_multimap[ground_sig_name]))
             node_path = nx.shortest_path(G, power_node, ground_node)
@@ -409,6 +409,8 @@ if __name__ == "__main__":
 
     gates.find_all_the_things()
 
+    print("Found {:d} pulldowns".format(len(gates.pulldowns)))
+    print("Found {:d} pass transistors".format(len(gates.pass_qs)))
     print("Found {:d} muxes (total {:d} qs)".format(len(gates.muxes),
         sum(g.num_qs() for g in gates.muxes)))
     for i in range(2, 10):

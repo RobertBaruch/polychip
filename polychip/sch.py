@@ -19,6 +19,7 @@ class SchObject(object):
         self.short_libname = short_libname
         self.name_offset_x = 0
         self.name_offset_y = 0
+        self.centroid = centroid
 
     def write_component(self, f):
         print("$Comp", file=f)
@@ -35,7 +36,7 @@ class SchObject(object):
         print("    1    {:d} {:d}".format(x, y), file=f)
         print("    1    0    0    -1  ", file=f)
         print("$EndComp", file=f)
-        print("{:s} {:s} -> {:d}, {:d}".format(self.short_libname, self.name, x, y))
+        print("{:s} {:s} -> {:d}, {:d} ({:s})".format(self.short_libname, self.name, x, y, str(self.centroid)))
         SchObject.timestamp += 1
 
 
@@ -50,7 +51,10 @@ class SchGate(SchObject):
     def __init__(self, gate):
         super().__init__(gate.output_power_q.name, gate.output_power_q.centroid, None, None)
 
-        if isinstance(gate, Multiplexer):
+        if isinstance(gate, PassTransistor):
+            self.libname = "NMOS_SUBSTR"
+            self.short_libname = "P"
+        elif isinstance(gate, Multiplexer):
             assert len(gate.selected_inputs) == 2, "More than 2 input mux isn't supported for schematic output yet."
             self.libname = "2MUX"
             self.short_libname = "2MUX"
@@ -105,6 +109,12 @@ def write_sch_file(filename, gates, inkscape_to_sch_transform):
 
         for q in gates.qs:
             SchTransistor(q).write_component(f)
+
+        for g in gates.pulldowns:
+            SchTransistor(only(g.qs)).write_component(f)
+
+        for g in gates.pass_qs:
+            SchGate(g).write_component(f)
 
         for g in gates.muxes:
             if len(g.inputs) == 2:

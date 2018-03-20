@@ -110,7 +110,7 @@ class InkscapeFile:
             self.transform[y] = self.transform[y] @ t
         shapes = {}
 
-        shapes[Layer.CONTACTS] = root.findall(InkscapeFile.layer_path("Contacts") + "/svg:poly", namespaces)
+        shapes[Layer.CONTACTS] = root.findall(InkscapeFile.layer_path("Contacts") + "/svg:path", namespaces)
         shapes[Layer.CONTACTS] += root.findall(InkscapeFile.layer_path("Contacts") + "/svg:rect", namespaces)
         shapes[Layer.POLY] = root.findall(InkscapeFile.layer_path("Poly") + "/svg:path", namespaces)
         shapes[Layer.POLY] += root.findall(InkscapeFile.layer_path("Poly") + "/svg:rect", namespaces)
