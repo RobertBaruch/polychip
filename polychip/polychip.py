@@ -1,8 +1,10 @@
 import argparse
 import collections
+import datetime
 import re
 import networkx as nx
 import shapely.ops
+import shapely.strtree
 import functools
 import pprint
 from enum import Enum, unique
@@ -81,8 +83,7 @@ def calculate_contacts(drawing):
             count += 1
             contacted = "Poly"
         if count != 2:
-            print("Warning: {:s} contact at {:s} has no connection".format(
-                contacted, str(c)))
+            print("Warning: {:s} contact at {:s} has no connection".format(contacted, str(c)))
         else:
             cs.append(contact)
     print("{:d} valid contacts".format(len(cs)))
@@ -119,46 +120,74 @@ def find_transistors_and_number_diffs(drawing):
     print("All diffs: {:d}".format(len(drawing.diff_array)))
     print("All polys: {:d}".format(len(drawing.poly_array)))
 
-    # Divide all diffs by all polys
+    t1 = datetime.datetime.now()
     difference = coerce_multipoly(drawing.multidiff.difference(drawing.multipoly))
-    print("Difference diffs: {:d}".format(len(difference)))
+    t2 = datetime.datetime.now()
+    print("Difference diffs: {:d} (in {:f} sec)".format(len(difference), (t2 - t1).total_seconds()))
 
+    t1 = datetime.datetime.now()
     intersections = coerce_multipoly(drawing.multidiff.intersection(drawing.multipoly))
-    print("Intersection diffs: {:d}".format(len(intersections)))
+    t2 = datetime.datetime.now()
+    print("Intersection diffs: {:d} (in {:f} sec)".format(len(intersections), (t2 - t1).total_seconds()))
 
+    t1 = datetime.datetime.now()
     contacted_intersections_array = []
     gates_array = []
+    diff_contacts = coerce_multipoly(intersections.intersection(drawing.multicontact))
+    t2 = datetime.datetime.now()
+    print("Diff contacts: {:d} (in {:f} sec)".format(len(diff_contacts.geoms), (t2 - t1).total_seconds()))
+
+    t1 = datetime.datetime.now()    
+    rtree = shapely.strtree.STRtree(diff_contacts)
+    t2 = datetime.datetime.now()
+    print("R-tree constructed in {:f} sec".format((t2 - t1).total_seconds()))
+
+    t1 = datetime.datetime.now()
     for intersection in intersections.geoms:
-        if intersection.intersects(drawing.multicontact):
+        candidates = rtree.query(intersection)
+        if len(candidates) != 0 and any(intersection.intersects(candidate) for candidate in candidates):
             contacted_intersections_array.append(intersection)
         else:
             gates_array.append(intersection)
 
     contacted_intersections = shapely.geometry.MultiPolygon(contacted_intersections_array)
-    print("Contacted intersections: {:d}".format(len(contacted_intersections)))
+    t2 = datetime.datetime.now()
+    print("Contacted intersections: {:d} (in {:f} sec)".format(len(contacted_intersections), (t2 - t1).total_seconds()))
     print("Gates: {:d}".format(len(gates_array)))
 
+    t1 = datetime.datetime.now()
     nongate_diffs = coerce_multipoly(shapely.ops.unary_union([difference, contacted_intersections]))
+    t2 = datetime.datetime.now()
     drawing.replace_diff_array(list(nongate_diffs.geoms))
-    print("nongate_diffs: {:d}".format(len(drawing.diff_array)))
+    print("nongate_diffs: {:d} (in {:f} sec)".format(len(drawing.diff_array), (t2 - t1).total_seconds()))
 
+    t1 = datetime.datetime.now()
     qs = []
+    rtree = shapely.strtree.STRtree(drawing.poly_array)
+    poly_dict = {}
+    for i, poly in enumerate(drawing.poly_array):
+        poly_dict[poly.wkb] = i
+
     for gate in gates_array:
         electrodes = [i for i, nongate in enumerate(drawing.diff_array) if gate.touches(nongate)]
         if len(electrodes) != 2:
             print("Error: transistor gate at {:s} doesn't appear to have two electrodes.".format(
                 str(gate.centroid)))
             continue
-        g = next( (i for i, poly in enumerate(drawing.poly_array) if gate.intersects(poly)), None)
+        candidates = rtree.query(gate)
+        g = next(poly for poly in candidates if gate.intersects(poly))
         if g is None:
             print("Error: transistor gate doesn't intersect any poly, which should never happen.")
+        else:
+            g = poly_dict[g.wkb]
         if electrodes[0] > electrodes[1]:
             electrodes[0], electrodes[1] = electrodes[1], electrodes[0]
 
         q = Transistor(gate, g, electrodes[0], electrodes[1], str(len(qs)))
         qs.append(q)
 
-    print("Located {:d} transistors".format(len(qs)))
+    t2 = datetime.datetime.now()
+    print("Located electrodes (in {:f} sec)".format((t2 - t1).total_seconds()))
     return qs
 
 
@@ -174,23 +203,26 @@ def print_node_path(nodes, drawing):
     if len(nodes) == 1:
         nodetype, nodename = next(nodes)
         polygon = get_polygon(nodetype, nodename, drawing)
-        print("  {:s} @ {:s}".format(nodetype, str(polygon.representative_point())))
+        print("  ({:s}, {:s}) @ {:s}".format(nodetype, str(nodename), str(polygon.representative_point())))
         return
 
     print("{")
     prev_nodetype = None
     prev_nodename = None
+    prev_polygon = None
     for nodetype, nodename in nodes:
         if prev_nodetype is None:
             prev_nodetype = nodetype
             prev_nodename = nodename
+            prev_polygon = get_polygon(prev_nodetype, prev_nodename, drawing)
             continue
         polygon = get_polygon(nodetype, nodename, drawing)
-        prev_polygon = get_polygon(prev_nodetype, prev_nodename, drawing)
-        print("  {:s} @ {:s}".format(
-            nodetype, str(polygon.intersection(prev_polygon).representative_point())))
+        print("  ({:s}, {:s}) x ({:s}, {:s}) @ {:s}".format(
+            prev_nodetype, str(prev_nodename), nodetype, str(nodename),
+            str(polygon.intersection(prev_polygon).representative_point())))
         prev_nodetype = nodetype
         prev_nodename = nodename
+        prev_polygon = get_polygon(prev_nodetype, prev_nodename, drawing)
     print("}")
         
 
@@ -216,14 +248,22 @@ def file_to_netlist(file, print_netlist=False, print_qs=False):
     root = parse_inkscape_svg(file)
     drawing = InkscapeFile(root)
 
+    t1 = datetime.datetime.now()
     qs = find_transistors_and_number_diffs(drawing)
+    t2 = datetime.datetime.now()
+    print("Located {:d} transistors (in {:f} sec)".format(len(qs), (t2 - t1).total_seconds()))
+
+    t1 = datetime.datetime.now()
     cs = calculate_contacts(drawing)
+    t2 = datetime.datetime.now()
+    print("Classified {:d} contacts (in {:f} sec)".format(len(cs), (t2 - t1).total_seconds()))
 
     sigs = {Type.DIFF: [None] * len(drawing.diff_array),
             Type.POLY: [None] * len(drawing.poly_array),
             Type.METAL: [None] * len(drawing.metal_array)}
     sig_multimap = collections.defaultdict(set)
 
+    t1 = datetime.datetime.now()
     for sname in drawing.snames:
         spoint = sname.center
         index = next( (i for i, p in enumerate(drawing.metal_array) if p.contains(spoint)), None)
@@ -249,7 +289,10 @@ def file_to_netlist(file, print_netlist=False, print_qs=False):
 
         print("Warning: label '{:s}' at {:s} not attached to anything".format(
             sname.text, str(spoint)))
+    t2 = datetime.datetime.now()
+    print("Attached {:d} signal names (in {:f} sec)".format(len(drawing.snames), (t2 - t1).total_seconds()))
 
+    t1 = datetime.datetime.now()
     for qname in drawing.qnames:
         index = next( (i for i, q in enumerate(qs) if q.gate_shape.intersects(qname.extents)), None)
         if index is not None:
@@ -258,7 +301,10 @@ def file_to_netlist(file, print_netlist=False, print_qs=False):
         else:
             print("Error: transistor name {:s} at {:s} doesn't intersect a gate.".format(
                 qname.text, str(qname.extents.coords[0])))
+    t2 = datetime.datetime.now()
+    print("Attached {:d} transistor names (in {:f} sec)".format(len(drawing.qnames), (t2 - t1).total_seconds()))
 
+    t1 = datetime.datetime.now()
     G = nx.Graph()
     for i in range(len(drawing.metal_array)):
         G.add_node((Type.METAL, i))
@@ -277,6 +323,8 @@ def file_to_netlist(file, print_netlist=False, print_qs=False):
         G.add_edge((Type.GATE, q.name), (Type.POLY, q.gate))
         G.add_edge((Type.E0, q.name), (Type.DIFF, q.electrode0))
         G.add_edge((Type.E1, q.name), (Type.DIFF, q.electrode1))
+
+    print("Graph has {:d} nodes and {:d} edges".format(len(G.adj), len(cs) + 3 * len(qs)))
 
     # All signals with the same name are connected, even if not physically.
     for sname, nodes in sig_multimap.items():
@@ -306,6 +354,13 @@ def file_to_netlist(file, print_netlist=False, print_qs=False):
                 if netname is not None and netname != node_signame:
                     print("Warning: component {:s} is named '{:s}' but is connected to '{:s}'".format(
                         str((nodetype, nodename)), node_signame, netname))
+                    if is_power_net(netname) or is_ground_net(netname) or is_power_net(node_signame) or is_ground_net(node_signame):
+                        node_path = nx.shortest_path(G, node_signame, netname)
+                        print("You probably didn't want that. Further analysis is pointless.")
+                        print("Here is the path in question:")
+                        print("------")
+                        print_node_path(node_path, drawing)
+                        sys.exit(1)
                 else:
                     netname = node_signame
 
@@ -321,7 +376,7 @@ def file_to_netlist(file, print_netlist=False, print_qs=False):
             print("FATAL: There's a short between power and ground. Further analysis is pointless.")
             print("Here is a path from power to ground:")
             print(node_path)
-            print('----')
+            print("----")
             print_node_path(node_path, drawing)
             sys.exit(1)
 
@@ -338,6 +393,8 @@ def file_to_netlist(file, print_netlist=False, print_qs=False):
                 qs_by_name[qname].electrode1_net = netname
         if len(component_net) > 0:
             nets[netname] = component_net
+    t2 = datetime.datetime.now()
+    print("Constructed netlist of {:d} nets (in {:f} sec)".format(len(nets), (t2 - t1).total_seconds()))
 
     if print_netlist:
         print(nets)
@@ -426,6 +483,8 @@ if __name__ == "__main__":
         sum(g.num_qs() for g in gates.tristate_inverters)))
     print("Found {:d} tristate buffers (total {:d} qs)".format(len(gates.tristate_buffers),
         sum(g.num_qs() for g in gates.tristate_buffers)))
+    print("Found {:d} mux D-latches (total {:d} qs)".format(len(gates.mux_d_latches),
+        sum(g.num_qs() for g in gates.mux_d_latches)))
 
     print("{:d} unallocated transistors".format(len(gates.qs)))
 

@@ -148,7 +148,7 @@ class Transform(object):
                 y = params[1]
             return Transform.translate(x, y)
         if splits[0] == "rotate":
-            a = params[0] * math.pi / 180
+            a = params[0] * math.tau / 360
             r = Transform.rotate(a)
             if len(params) == 1:
                 return r
@@ -164,10 +164,10 @@ class Transform(object):
                 y = params[1]
             return Transform.scale(x, y)
         if splits[0] == "skewX":
-            a = params[0] * math.pi / 180
+            a = params[0] * math.tau / 360
             return Transform(1, 0, math.tan(a), 1, 0, 0)
         if splits[0] == "skewY":
-            a = params[0] * math.pi / 180
+            a = params[0] * math.tau / 360
             return Transform(1, math.tan(a), 0, 1, 0, 0)
         raise AssertionError("Unknown transform type " + splits[0])
 
@@ -310,6 +310,8 @@ def svgpath_to_shapely_path(element, trans, debug = False):
 
     For consistency, we modify the orientations so that shells are always counter-clockwise
     (right-hand rule -> positive area) and holes are clockwise (right-hand rule -> negative area).
+
+    TODO: use math.fsum, which should help with this (at least, with intermediate points):
 
     When a path is explicity closed (i.e. a -> b -> c -> a) and the points are relative moves, 
     and then followed by 'z' to close the path, there is the problem of floating point inaccuracy making
