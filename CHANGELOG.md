@@ -1,3 +1,8 @@
+# v0.4.2 (25 Mar 2018)
+* Preliminary recognition of multiplexer-based D-latches.
+* Preliminary wiring in schematic.
+* One of the O(N log N) steps in transistor recognition improved to O(log N).
+
 # v0.4.1 (19 Mar 2018)
 * Fixes bug where non-rectangular contacts weren't being recognized.
 * Preliminary recognition of pulldown and pass transistors.
