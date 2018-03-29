@@ -1,3 +1,9 @@
+# v0.5 (28 Mar 2018)
+* Combinatorial gate recognition ("Look-Up Table", or LUT)
+* Improved pass transistor recognition algorithm
+* Adds more symbols to schematic, adds power and ground connections on transistors.
+* More tests added for LUTs, NANDs, pass transistors, mux-based D-latch.
+
 # v0.4.2 (25 Mar 2018)
 * Preliminary recognition of multiplexer-based D-latches.
 * Preliminary wiring in schematic.

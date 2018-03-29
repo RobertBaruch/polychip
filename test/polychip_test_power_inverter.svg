@@ -296,10 +296,10 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="0.70710678"
-     inkscape:cx="665.2364"
+     inkscape:cx="412.09217"
      inkscape:cy="2762.8196"
      inkscape:document-units="px"
-     inkscape:current-layer="layer10"
+     inkscape:current-layer="layer8"
      showgrid="false"
      inkscape:window-width="1920"
      inkscape:window-height="1017"
@@ -317,7 +317,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
         <cc:license
            rdf:resource="http://creativecommons.org/licenses/by-sa/4.0/" />
       </cc:Work>
@@ -355,6 +355,13 @@
        height="41.012192"
        x="226.27417"
        y="396.82468" />
+    <rect
+       style="display:inline;opacity:1;vector-effect:none;fill:#00ff00;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:3.45219207;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect1716-8"
+       width="103.23761"
+       height="41.012192"
+       x="473.76154"
+       y="594.10748" />
   </g>
   <g
      inkscape:groupmode="layer"
@@ -382,6 +389,13 @@
        d="m 561.44278,9113.7046 v 183.8477 l 36.76956,-1.4142 -7.07107,-190.9188 z"
        id="path1759"
        inkscape:connector-curvature="0" />
+    <rect
+       style="opacity:1;vector-effect:none;fill:#ff00ff;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:7.55905533;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect7454"
+       width="26.870058"
+       height="250.3158"
+       x="510.5311"
+       y="9239.5693" />
   </g>
   <g
      inkscape:groupmode="layer"
@@ -406,6 +420,13 @@
        height="11.5"
        x="477.80908"
        y="9089.3145" />
+    <rect
+       style="display:inline;opacity:1;vector-effect:none;fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:7.55905533;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect1062-2"
+       width="13.5"
+       height="11.5"
+       x="517.92322"
+       y="9247.9619" />
   </g>
   <g
      inkscape:groupmode="layer"

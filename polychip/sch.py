@@ -13,18 +13,21 @@ class SchObject(object):
     timestamp = 0
     inkscape_to_sch_transform = None  # This must be initialized before instantiating any SchObjects.
 
-    def __init__(self, obj, name, centroid, libname, short_libname):
+    def __init__(self, obj, name, centroid, transformed_centroid = None):
         self.obj = obj
         self.name = name
-        self.sch_loc = shapely.affinity.affine_transform(centroid, SchObject.inkscape_to_sch_transform)
-        self.libname = libname
-        self.short_libname = short_libname
-        self.name_offset_x = 0
-        self.name_offset_y = 0
+        if transformed_centroid is None:
+            self.sch_loc = shapely.affinity.affine_transform(centroid, SchObject.inkscape_to_sch_transform)
+        else:
+            self.sch_loc = transformed_centroid
+        self.libname = ""
+        self.short_libname = ""
+        self.name_offset = (0, 0)
         self.rotation = 0  # In 90-degree intervals
         self.centroid = centroid
         self.output_offsets = []  # tuple of x,y, ordered same as gate
         self.input_offsets = []
+        self.short_libname_offset = None
         self.output_nets = []
         self.input_nets = []
 
@@ -40,9 +43,17 @@ class SchObject(object):
         x = round(self.sch_loc.x)
         y = round(self.sch_loc.y)
         print("P {:d} {:d}".format(x, y), file=f)
-        print("F 0 \"{:s}\" H {:d} {:d} 20  0000 L CNN".format(
-            self.name, x + self.name_offset_x, y + self.name_offset_y), file=f)
-        print("F 1 \"{:s}\" H {:d} {:d} 20  0001 C CNN".format(self.short_libname, x, y), file=f)
+        print("F 0 \"{:s}\" H {:d} {:d} 20  0000 C CNN".format(
+            self.name, x + self.name_offset[0], y + self.name_offset[1]), file=f)
+        libname_x = x
+        libname_y = y
+        libname_invisible = "1"
+        if self.short_libname_offset is not None:
+            libname_x += self.short_libname_offset[0]
+            libname_y += self.short_libname_offset[1]
+            libname_invisible = "0"
+        print("F 1 \"{:s}\" H {:d} {:d} 20  000{:s} C CNN".format(
+            self.short_libname, libname_x, libname_y, libname_invisible), file=f)
         print("F 2 \"\" H {:d} {:d} 20  0001 C CNN".format(x, y), file=f)
         print("F 3 \"\" H {:d} {:d} 20  0001 C CNN".format(x, y), file=f)
         print("F 4 \"{:s}\" H {:d} {:d} 20  0001 C CNN".format(str(self.centroid), x, y), file=f)
@@ -51,21 +62,51 @@ class SchObject(object):
         print("$EndComp", file=f)
         SchObject.timestamp += 1
 
+        if type(self) == SchTransistor:
+            for i, e in enumerate([self.q.electrode0_net, self.q.electrode1_net]):
+                offset_x = self.electrode_offsets[i][0]
+                offset_y = self.electrode_offsets[i][1]
+                loc = shapely.geometry.Point(self.sch_loc.x + offset_x, self.sch_loc.y + offset_y)
+                if is_power_net(e):
+                    SchPower(e, loc, 2 * i).write_component(f)
+                if is_ground_net(e):
+                    SchGround(e, loc, 2 * (1 - i)).write_component(f)
+
 
 class SchTransistor(SchObject):
     def __init__(self, q):
-        super().__init__(q, q.name, q.centroid, "NMOS-SMALL", "Q")
-        # self.output_offsets = [(30, -60), (30, 60)]
+        super().__init__(q, q.name, q.centroid)
+        self.q = q
+        self.libname = "NMOS-SMALL"
+        self.short_libname = "Q"
+        self.electrode_offsets = [(30, -60), (30, 60)]
         self.input_offsets = [(-40, 0)]
         # self.output_nets = [q.electrode0_net, q.electrode1_net]
         self.input_nets = [q.gate_net]
 
 
+class SchPower(SchObject):
+    def __init__(self, net, point, rotation):
+        super().__init__(None, net, None, point)
+        self.libname = "VCC"
+        self.short_libname = "VCC"
+        self.name_offset = (0, 60)
+        self.rotation = rotation
+
+
+class SchGround(SchObject):
+    def __init__(self, net, point, rotation):
+        super().__init__(None, net, None, point)
+        self.libname = "GND"
+        self.short_libname = "GND"
+        self.name_offset = (0, -80)
+        self.rotation = rotation
+
+
 class SchGate(SchObject):
     def __init__(self, gate):
-        super().__init__(gate, gate.output_power_q.name, gate.output_power_q.centroid, None, None)
-        if gate.output is not None:
-            self.output_nets = [gate.output]
+        super().__init__(gate, gate.output_power_q.name, gate.output_power_q.centroid)
+        self.output_nets = gate.outputs
         self.input_nets = gate.inputs
 
         if isinstance(gate, PassTransistor):
@@ -77,8 +118,8 @@ class SchGate(SchObject):
             n = len(gate.selected_inputs)
             assert n <= 3, "More than 3 input mux isn't supported for schematic output yet."
             self.libname = "{:d}MUX".format(n)
-            self.short_libname = "{:d}MUX".format(n)
-            self.name_offset_y = 25
+            self.short_libname = self.libname
+            self.name_offset = (0, 25)
             if n == 2:
                 self.output_offsets = [(150, 0)]
                 self.input_offsets = [(-150, -50), (-150, 50), (-50, 150), (50, 150)]
@@ -98,14 +139,42 @@ class SchGate(SchObject):
         elif isinstance(gate, TristateInverter):
             self.libname = "INV_TRISTATE_NEG_OE_SMALL"
             self.short_libname = "ZINV"
+            self.input_offsets = [(-30, 0), (40, -70)]
+            self.output_offsets = [(100, 0)]
 
         elif isinstance(gate, TristateBuffer):
             self.libname = "BUFFER_TRISTATE_NEG_OE_SMALL"
             self.short_libname = "ZBUFF"
+            self.input_offsets = [(-30, 0), (40, -70)]
+            self.output_offsets = [(100, 0)]
 
         elif isinstance(gate, MuxDLatch):
             self.libname = "MUX_D_LATCH"
             self.short_libname = "DLATCH"
+            self.input_offsets = [(-200, 0), (-50, 200), (50, 200)]
+            self.output_offsets = [(200, 50), (200, -50)]
+
+        elif isinstance(gate, Lut):
+            n = len(gate.inputs)
+            assert n > 1, "A 1LUT ({:s}) makes no sense. It must be an inverter.".format(gate.name)
+            assert n <= 7, "{:d}LUT ({:s}) isn't supported for schematic output yet.".format(n, gate.name)
+            self.libname = "{:d}LUT".format(n)
+            self.short_libname = self.libname
+            self.output_offsets = [(120, 0)]
+            self.name_offset = (0, 30)
+            self.short_libname_offset = (0, -30)
+            if n == 2:
+                self.input_offsets = [(-120, -30), (-120, 30)]
+            elif n == 3:
+                self.input_offsets = [(-120, -70), (-120, 0), (-120, 70)]
+            elif n == 4:
+                self.input_offsets = [(-120, -90), (-120, -30), (-120, 30), (-120, 90)]
+            elif n == 5:
+                self.input_offsets = [(-120, -120), (-120, -60), (-120, 0), (-120, 60), (-120, 120)]
+            elif n == 6:
+                self.input_offsets = [(-120, -150), (-120, -90), (-120, -30), (-120, 30), (-120, 90), (-120, 150)]
+            elif n == 7:
+                self.input_offsets = [(-120, -180), (-120, -120), (-120, -60), (-120, 0), (-120, 60), (-120, 120), (-120, 180)]
 
         else:
             raise AssertionError("Unsupported gate for schematic output: " + str(type(gate)))
@@ -163,12 +232,21 @@ def write_sch_file(filename, gates, inkscape_to_sch_transform):
         for g in gates.pass_qs:
             sch_objects[g.name] = SchGate(g)
 
+        for g in gates.luts:
+            if len(g.inputs) <= 7:
+                sch_objects[g.name] = SchGate(g)
+            else:
+                print("[{:d}-LUT not supported for schematic output; just placing its transistors.".format(
+                    len(g.inputs)))
+                for q in g.qs:
+                    sch_objects[q.name] = SchTransistor(q)
+
         for g in gates.muxes:
-            if len(g.inputs) <= 3:
+            if len(g.selecting_inputs) <= 3:
                 sch_objects[g.name] = SchGate(g)
             else:
                 print("[{:d}-MUX not supported for schematic output; just placing its transistors.".format(
-                    len(g.inputs)))
+                    len(g.selecting_inputs)))
                 for q in g.qs:
                     sch_objects[q.name] = SchTransistor(q)
 

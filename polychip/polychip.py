@@ -466,12 +466,16 @@ if __name__ == "__main__":
 
     gates.find_all_the_things()
 
+    print("Found {:d} luts".format(len(gates.luts)))
+    for i in range(2, 20):
+        gs = {g for g in gates.luts if len(g.inputs) == i}
+        print("  {:d} {:d}-luts".format(len(gs), i))
     print("Found {:d} pulldowns".format(len(gates.pulldowns)))
     print("Found {:d} pass transistors".format(len(gates.pass_qs)))
     print("Found {:d} muxes (total {:d} qs)".format(len(gates.muxes),
         sum(g.num_qs() for g in gates.muxes)))
-    for i in range(2, 10):
-        gs = {g for g in gates.muxes if len(g.selected_inputs) == i}
+    for i in range(2, 25):
+        gs = {g for g in gates.muxes if len(g.selecting_inputs) == i}
         print("  {:d} {:d}-muxes".format(len(gs), i))
 
     for i in range(1, 10):
@@ -483,8 +487,9 @@ if __name__ == "__main__":
         sum(g.num_qs() for g in gates.tristate_inverters)))
     print("Found {:d} tristate buffers (total {:d} qs)".format(len(gates.tristate_buffers),
         sum(g.num_qs() for g in gates.tristate_buffers)))
-    print("Found {:d} mux D-latches (total {:d} qs)".format(len(gates.mux_d_latches),
-        sum(g.num_qs() for g in gates.mux_d_latches)))
+    print("Found {:d} mux D-latches (total {:d} qs): {:s}".format(len(gates.mux_d_latches),
+        sum(g.num_qs() for g in gates.mux_d_latches),
+        str(list(g.output_power_q.name for g in gates.mux_d_latches))))
 
     print("{:d} unallocated transistors".format(len(gates.qs)))
 

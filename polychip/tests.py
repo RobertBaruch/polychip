@@ -207,11 +207,33 @@ class PolychipTestCase(unittest.TestCase):
         gates = Gates(netlist, qs)
         gates.find_all_the_things()
 
+        self.assertEqual(len(gates.luts), 0)
         self.assertEqual(len(gates.muxes), 0)
-        self.assertEqual(len(gates.qs), 1)
-        q = only(gates.qs)
+        self.assertEqual(len(gates.pass_qs), 1)
+        self.assertEqual(len(only(gates.pass_qs).qs), 1)
+        q = only(only(gates.pass_qs).qs)
         self.assertIs(type(q), ParallelTransistor)
         self.assertEqual(q.num_qs(), 4)
+
+    def test_find_lut(self):
+        filename = "test/polychip_test_lut.svg"
+        netlist, qs, _ = file_to_netlist(filename)
+        gates = Gates(netlist, qs)
+        gates.find_all_the_things()
+
+        self.assertEqual(len(gates.luts), 1)
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 0)
+        self.assertEqual(len(gates.nands), 0)
+        lut = only(gates.luts)
+        self.assertEqual(set(lut.inputs), {"IN1", "IN2", "IN3", "IN4"})
+        self.assertEqual(lut.output(), "OUT")
+        self.assertEqual(lut.num_qs(), 5)
+        self.assertEqual(set(lut.neg_ens), {"IN1", "IN2"})
+        self.assertEqual(set(lut.non_neg_ens), {"IN3", "IN4"})
+        self.assertEqual({q.name for q in lut.nor_input_qs}, {"QE1", "QE2", "QI3"})
+        self.assertEqual(lut.output_power_q.name, "QP")
+        self.assertEqual(len(gates.qs), 0)
 
     def test_find_inverter(self):
         filename = "test/polychip_test_inverter.svg"
@@ -219,11 +241,12 @@ class PolychipTestCase(unittest.TestCase):
         gates = Gates(netlist, qs)
         gates.find_all_the_things()
 
+        self.assertEqual(len(gates.luts), 0)
         self.assertEqual(len(gates.muxes), 0)
         self.assertEqual(len(gates.nors), 1)
         inv = only(gates.nors)
         self.assertEqual(set(inv.inputs), {"IN"})
-        self.assertEqual(inv.output, "OUT")
+        self.assertEqual(inv.output(), "OUT")
         self.assertEqual(inv.num_qs(), 2)
         self.assertEqual(len(gates.qs), 0)
 
@@ -233,12 +256,44 @@ class PolychipTestCase(unittest.TestCase):
         gates = Gates(netlist, qs)
         gates.find_all_the_things()
 
+        self.assertEqual(len(gates.luts), 0)
         self.assertEqual(len(gates.muxes), 0)
         self.assertEqual(len(gates.nors), 1)
         nor = only(gates.nors)
         self.assertEqual(set(nor.inputs), {"IN1", "IN2"})
-        self.assertEqual(nor.output, "OUT")
+        self.assertEqual(nor.output(), "OUT")
         self.assertEqual(nor.num_qs(), 3)
+        self.assertEqual(len(gates.qs), 0)
+
+    def test_find_3nand(self):
+        filename = "test/polychip_test_nand.svg"
+        netlist, qs, _ = file_to_netlist(filename)
+        gates = Gates(netlist, qs)
+        gates.find_all_the_things()
+
+        self.assertEqual(len(gates.luts), 0)
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 0)
+        self.assertEqual(len(gates.nands), 1)
+        nand = only(gates.nands)
+        self.assertEqual(set(nand.inputs), {"IN1", "IN2", "IN3"})
+        self.assertEqual(nand.output(), "OUT")
+        self.assertEqual(nand.num_qs(), 4)
+        self.assertEqual(len(gates.qs), 0)
+
+    def test_find_pass_q(self):
+        filename = "test/polychip_test_pass_q.svg"
+        netlist, qs, _ = file_to_netlist(filename)
+        gates = Gates(netlist, qs)
+        gates.find_all_the_things()
+
+        self.assertEqual(len(gates.pass_qs), 1)
+        self.assertEqual(len(gates.luts), 0)
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 2)
+        self.assertEqual(len(gates.nands), 0)
+        pass_q = only(gates.pass_qs)
+        self.assertEqual(pass_q.name, "QPP")
         self.assertEqual(len(gates.qs), 0)
 
     def test_find_2mux(self):
@@ -247,12 +302,15 @@ class PolychipTestCase(unittest.TestCase):
         gates = Gates(netlist, qs)
         gates.find_all_the_things()
 
+        self.assertEqual(len(gates.pass_qs), 1)
+        self.assertEqual(len(gates.luts), 0)
         self.assertEqual(len(gates.muxes), 1)
         self.assertEqual(len(gates.nors), 0)
         mux = only(gates.muxes)
         self.assertEqual(set(mux.selected_inputs), {"X0", "X1"})
-        self.assertEqual(set(mux.inputs), {"S0", "S1"})
-        self.assertEqual(mux.output, "Y")
+        self.assertEqual(set(mux.selecting_inputs), {"S0", "S1"})
+        self.assertEqual(set(mux.inputs), {"X0", "X1", "S0", "S1"})
+        self.assertEqual(mux.output(), "Y")
         self.assertEqual(mux.num_qs(), 2)
         self.assertEqual(len(gates.qs), 2)
 
@@ -262,13 +320,16 @@ class PolychipTestCase(unittest.TestCase):
         gates = Gates(netlist, qs)
         gates.find_all_the_things()
 
+        self.assertEqual(len(gates.pass_qs), 1)
+        self.assertEqual(len(gates.luts), 0)
         self.assertEqual(len(gates.muxes), 1)
         self.assertEqual(len(gates.nors), 0)
         mux = only(gates.muxes)
         self.assertIs(type(mux), PowerMultiplexer)
         self.assertEqual(set(mux.selected_inputs), {"VCC", "GND"})
+        self.assertEqual(set(mux.selecting_inputs), {"S0", "S1"})
         self.assertEqual(set(mux.inputs), {"S0", "S1"})
-        self.assertEqual(mux.output, "Y")
+        self.assertEqual(mux.output(), "Y")
         self.assertEqual(mux.num_qs(), 2)
         self.assertEqual(len(gates.qs), 0)
 
@@ -278,12 +339,14 @@ class PolychipTestCase(unittest.TestCase):
         gates = Gates(netlist, qs)
         gates.find_all_the_things()
 
+        self.assertEqual(len(gates.pass_qs), 1)
+        self.assertEqual(len(gates.luts), 0)
         self.assertEqual(len(gates.muxes), 0)
         self.assertEqual(len(gates.nors), 1)
         inv = only(gates.nors)
         self.assertIs(type(inv), PowerNorGate)
         self.assertEqual(set(inv.inputs), {"IN"})
-        self.assertEqual(inv.output, "OUT")
+        self.assertEqual(inv.output(), "OUT")
         self.assertEqual(inv.num_qs(), 4)
         self.assertEqual(len(gates.qs), 0)
 
@@ -293,12 +356,14 @@ class PolychipTestCase(unittest.TestCase):
         gates = Gates(netlist, qs)
         gates.find_all_the_things()
 
+        self.assertEqual(len(gates.pass_qs), 1)
+        self.assertEqual(len(gates.luts), 0)
         self.assertEqual(len(gates.muxes), 0)
         self.assertEqual(len(gates.nors), 1)
         nor = only(gates.nors)
         self.assertIs(type(nor), PowerNorGate)
         self.assertEqual(set(nor.inputs), {"IN1", "IN2"})
-        self.assertEqual(nor.output, "OUT")
+        self.assertEqual(nor.output(), "OUT")
         self.assertEqual(nor.num_qs(), 6)
         self.assertEqual(len(gates.qs), 0)
 
@@ -308,12 +373,14 @@ class PolychipTestCase(unittest.TestCase):
         gates = Gates(netlist, qs)
         gates.find_all_the_things()
 
+        self.assertEqual(len(gates.pass_qs), 1)
+        self.assertEqual(len(gates.luts), 0)
         self.assertEqual(len(gates.muxes), 0)
         self.assertEqual(len(gates.nors), 0)
         self.assertEqual(len(gates.tristate_inverters), 1)
         zinv = only(gates.tristate_inverters)
         self.assertEqual(zinv.input(), "IN")
-        self.assertEqual(zinv.output, "OUT")
+        self.assertEqual(zinv.output(), "OUT")
         self.assertEqual(zinv.noe, "/OE")
         self.assertEqual(zinv.num_qs(), 10)
         self.assertEqual(len(gates.qs), 0)
@@ -324,12 +391,14 @@ class PolychipTestCase(unittest.TestCase):
         gates = Gates(netlist, qs)
         gates.find_all_the_things()
 
+        self.assertEqual(len(gates.pass_qs), 1)
+        self.assertEqual(len(gates.luts), 0)
         self.assertEqual(len(gates.muxes), 0)
         self.assertEqual(len(gates.nors), 0)
         self.assertEqual(len(gates.tristate_buffers), 1)
         zbuff = only(gates.tristate_buffers)
         self.assertEqual(zbuff.input(), "IN")
-        self.assertEqual(zbuff.output, "OUT")
+        self.assertEqual(zbuff.output(), "OUT")
         self.assertEqual(zbuff.noe, "/OE")
         self.assertEqual(zbuff.num_qs(), 10)
         self.assertEqual(len(gates.qs), 0)

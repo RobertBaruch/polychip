@@ -87,6 +87,9 @@ class Transistor(object):
     def is_powering(self):
         return is_power_net(self.electrode0_net) or is_power_net(self.electrode1_net)
 
+    def is_electrode_connected_to(self, net):
+        return self.electrode0_net == net or self.electrode1_net == net
+
 
 class ParallelTransistor(Transistor):
     """Represents a "power" transistor.
@@ -110,21 +113,30 @@ class ParallelTransistor(Transistor):
 
 class Gate(object):
     """
+    To ensure pass-by-value in the arguments, all lists and sets are copied.
+
     Attributes:
         output_power_q (Transistor): The transistor giving the output power.
-        output (str): The name of the output net.
+        outputs ([str]): The name of the output nets. Generally the order is significant.
         inputs ([str]): The list of names of the input nets. Generally the order is significant.
-        qs ({Transistor}): The set of transistors making up the gate.
+        qs ([Transistor]): The list of transistors making up the gate,including any subgates
+        subgates ([Gate]): The list of gates that make up this gate.
     """
-    def __init__(self, output_power_q, output, inputs, qs):
+    def __init__(self, output_power_q, outputs, inputs, qs, subgates=[]):
         self.output_power_q = output_power_q
         self.name = self.output_power_q.name
-        self.output = output
-        self.inputs = inputs
-        self.qs = set(qs)
+        self.outputs = list(outputs)
+        self.inputs = list(inputs)
+        self.qs = list(qs)
+        self.subgates = list(subgates)
+        for g in subgates:
+            self.qs.extend(g.qs)
 
     def input(self):
         return only(self.inputs)
+
+    def output(self):
+        return only(self.outputs)
 
     def num_qs(self):
         return (sum(q.num_qs() for q in self.qs if type(q) == ParallelTransistor) +
@@ -133,41 +145,95 @@ class Gate(object):
     def any_input_in(self, nets):
         return any(input in nets for input in inputs)
 
+    def replace_inputs(self, inputs):
+        self.inputs = list(inputs)
+
+    def replace_outputs(self, outputs):
+        self.outputs = list(outputs)
+
     def as_dict(self):
         return {
             'type': type(self),
             'output_power_q': self.output_power_q.as_dict(),
             'qs':  [q.as_dict() for q in self.selection_qs],
-            'out': self.output,
+            'outs': self.outputs,
             'ins': self.inputs,
         }
 
+    @staticmethod
+    def sort_by_name(g):
+        return str(g.name)
+
+
+class Lut(Gate):
+    """A generalized gate with an nmos resistor at the top and a tree of transistors to
+    ground. Within the tree, no electrode may connect to anything except ground, the
+    nmos output net, or another in-tree transistor's electrode.
+    """
+    def __init__(self, nmos_resistor_q, output_net, qs):
+        assert len(qs) > 1, "LUT qs for output {:s} has only {:d} qs".format(output_net, len(qs))
+        super().__init__(nmos_resistor_q, [output_net], [], qs)
+        logic_qs = list(qs)
+        logic_qs.remove(nmos_resistor_q)
+        neg_ens = {q.gate_net for q in logic_qs if q.is_grounding() and q.nongrounded_electrode_net() == output_net}
+        self.neg_ens = list(neg_ens)
+        self.non_neg_ens = list({q.gate_net for q in logic_qs} - neg_ens)
+        self.replace_inputs(self.neg_ens + self.non_neg_ens)
+        self.nor_input_qs = [q for q in logic_qs if q.is_electrode_connected_to(output_net)]
+        self.graph = nx.Graph()
+        for q in logic_qs:
+            self.graph.add_edge(q.electrode0_net, q.electrode1_net, q=q)
+
+    def is_nor(self):
+        return len(self.non_neg_ens) == 0
+
+    def is_nand(self):
+        grounds = {n for n in self.graph if is_ground_net(n)}
+        if len(grounds) > 1:
+            return False
+        paths = nx.all_simple_paths(self.graph, self.output(), only(grounds))
+        next(paths)
+        return next(paths, None) == None  # There was only one path to ground.
+
 
 class PassTransistor(Gate):
-    """A pass transistor has no powering elements on either of its electrodes."""
-    def __init__(self, q):
-        super().__init__(q, None, [q.electrode0_net, q.electrode1_net], {q})
+    """A pass transistor has (at least) one electrode unpowered and connected to at least one gate.
+
+    Attributes:
+        output (str): The electrode net connected to the unpowered net connected to at least one gate.
+    """
+    def __init__(self, q, output):
+        super().__init__(q, [output], [], [q])
+        inputs = [q.gate_net, q.electrode0_net, q.electrode1_net]
+        inputs.remove(output)
+        self.replace_inputs(inputs)
+        self.selecting_input = q.gate_net
+        self.selected_input = only({q.electrode0_net, q.electrode1_net} - {output})
 
 
 class Pulldown(Gate):
     """A resistor to ground, formed by an NMOS transistor."""
     def __init__(self, q):
-        super().__init__(q, None, [q.nongrounded_electrode_net()], {q})
+        super().__init__(q, [], [q.nongrounded_electrode_net()], {q})
 
 
 class Multiplexer(Gate):
     """
+    Args:
+        output (str): The output net.
+        selection_qs ([PassTransistor]): The pass transistors in the mux.
+
     Attributes:
         selected_inputs ([str]): The list of X-inputs which get selected to be the output.
         selecting_inputs ([str]): The list of S-inputs which selected a selected_input to be the output.
     """
     def __init__(self, output, selection_qs):
         assert(len(selection_qs) >= 2)
-        # We arbitrarily pick an output power q, since the multiplexer is actually unpowered
-        super().__init__(next(iter(selection_qs)), output, [],
-            selection_qs)
-        self.selected_inputs = [q.opposite_electrode_net(output) for q in selection_qs]
-        self.selecting_inputs = [q.gate_net for q in selection_qs]
+        # We arbitrarily pick an output power q, since the multiplexer is actually unpowered,
+        # but pick the alphanumerically named lowest one for stability.
+        super().__init__(sorted(selection_qs, key=Gate.sort_by_name)[0].output_power_q, [output], [], [], selection_qs)
+        self.selected_inputs = [q.selected_input for q in selection_qs]
+        self.selecting_inputs = [q.selecting_input for q in selection_qs]
         self.inputs = list(self.selected_inputs)
         self.inputs.extend(self.selecting_inputs)
 
@@ -182,9 +248,16 @@ class Multiplexer(Gate):
 
 class PowerMultiplexer(Multiplexer):
     """A mux that selects only between power and ground, and not necessarily with only two inputs.
+
+    Args:
+        mux (Multiplexer): The mux selecting between power and ground.
+
+    Attributes:
+        high_inputs ([str]): The list of gate inputs which select power.
+        low_inputs ([str]): The list of gate inputs which select ground.
     """
     def __init__(self, mux):
-        super().__init__(mux.output, mux.qs)
+        super().__init__(mux.output(), mux.subgates)
         qs = list(mux.qs)
         self.high_inputs = [q.gate_net for q in qs if q.is_powering()]
         self.low_inputs = [q.gate_net for q in qs if q.is_grounding()]
@@ -192,32 +265,24 @@ class PowerMultiplexer(Multiplexer):
         self.inputs.extend(self.low_inputs)
 
 
-class NorGate(Gate):
-    def __init__(self, nmos_resistor, grounding_qs, output, inputs):
-        super().__init__(nmos_resistor, output, inputs, set(grounding_qs) | {nmos_resistor})
-        self.nmos_resistor = nmos_resistor
-        self.grounding_qs = grounding_qs
+class NorGate(Lut):
+    def __init__(self, lut):
+        super().__init__(lut.output_power_q, only(lut.outputs), lut.qs)
+        self.lut = lut
 
     def as_dict(self):
         d = super().as_dict()
         d.update({
             'type': 'NOR',
-            'grounding_qs': [q.as_dict() for q in self.grounding_qs],
         })
         return d
 
-    @staticmethod
-    def from_net(net, gates):
-        nmos_resistor = (gates.electrode_qs_in(net) & gates.nmos_resistor_qs).pop()
-        grounding_qs = list(gates.electrode_qs_in(net) - {nmos_resistor})
-        output = net
-        inputs = [q.gate_net for q in grounding_qs]
-        return NorGate(nmos_resistor, grounding_qs, output, inputs)
 
-
-class PowerNorGate(Gate):
+class PowerNorGate(NorGate):
     def __init__(self, nor_gate, mux, output):
-        super().__init__(nor_gate.nmos_resistor, output, nor_gate.inputs, nor_gate.qs | mux.qs)
+        super().__init__(nor_gate.lut)
+        self.replace_outputs([output])
+        self.qs = nor_gate.qs + mux.qs
         self.nor = nor_gate
         self.mux = mux
 
@@ -229,10 +294,23 @@ class PowerNorGate(Gate):
         return d
 
 
+class Nand(Lut):
+    def __init__(self, lut):
+        super().__init__(lut.output_power_q, only(lut.outputs), lut.qs)
+        self.lut = lut
+
+    def as_dict(self):
+        d = super().as_dict()
+        d.update({
+            'type': 'NAND',
+        })
+        return d
+
+
 class TristateInverter(Gate):
     def __init__(self, inverter, high_nor, low_nor, mux, noe):
-        super().__init__(mux.output_power_q, mux.output, [inverter.input(), noe],
-            inverter.qs | high_nor.qs | low_nor.qs | mux.qs)
+        super().__init__(mux.output_power_q, mux.outputs, [inverter.input(), noe],
+            inverter.qs + high_nor.qs + low_nor.qs + mux.qs)
         self.inverter = inverter
         self.high_nor = high_nor
         self.low_nor = low_nor
@@ -254,8 +332,8 @@ class TristateInverter(Gate):
 
 class TristateBuffer(Gate):
     def __init__(self, inverter, high_nor, low_nor, mux, noe):
-        super().__init__(mux.output_power_q, mux.output, [inverter.input(), noe],
-            inverter.qs | high_nor.qs | low_nor.qs | mux.qs)
+        super().__init__(mux.output_power_q, mux.outputs, [inverter.input(), noe],
+            inverter.qs + high_nor.qs + low_nor.qs + mux.qs)
         self.inverter = inverter
         self.high_nor = high_nor
         self.low_nor = low_nor
@@ -275,25 +353,62 @@ class TristateBuffer(Gate):
         return d
 
 class MuxDLatch(Gate):
-    def __init__(self, mux, q_nor, nq_nor):
-        super().__init__(q_nor.output_power_q, q_nor.output, [],
-            mux.qs | q_nor.qs | nq_nor.qs)
+    """A multiplexer-based D-latch.
+
+                 _____    +----------------- /Q
+         +------|     |   |   _____
+         |      | lut |---+-o|     |
+         |   +-o|_____|      | lut |-----+--  Q
+         |   |            +--|_____|     |
+         |   |            |              |
+        /SET | Y         /CLR         X0 |
+           --------------------------------
+           |                              |
+        D -| X1           mux             |
+           |______________________________|
+               | S1                S0 |
+               |                      |
+               C                      /C
+
+    The inputs are ordered as [D, C, /C], and the outputs are [Q, /Q].
+    TODO: What about the SET/CLR inputs? Maybe we could separate out the neg_en
+    used in each lut as separate luts. Then they could be represented in the
+    schematic.
+    """
+    # def __init__(self, mux, q_nor, nq_nor):
+    #     super().__init__(q_nor.output_power_q, [q_nor.output(), nq_nor.output()], [],
+    #         mux.qs | q_nor.qs | nq_nor.qs)
+    #     self.mux = mux
+    #     self.q_nor = q_nor
+    #     self.nq_nor = nq_nor
+    #     self.q_output = q_nor.output()
+    #     self.nq_output = nq_nor.output()
+    #     i = next(i for i, input in enumerate(mux.selected_inputs) if input == q_nor.output())
+    #     self.nc_input = mux.selecting_inputs[i]
+    #     self.c_input = mux.selecting_inputs[1 - i]
+    #     self.d_input = mux.selected_inputs[1 - i]
+    #     self.set_inputs = [input for input in nq_nor.inputs if input != mux.output()]
+    #     self.clr_inputs = [input for input in q_nor.inputs if input != nq_nor.output()]
+    #     self.inputs = [self.d_input, self.c_input, self.nc_input]
+    def __init__(self, mux, q_lut, nq_lut):
+        super().__init__(q_lut.output_power_q, [q_lut.output(), nq_lut.output()], [],
+            mux.qs + q_lut.qs + nq_lut.qs)
         self.mux = mux
-        self.q_nor = q_nor
-        self.nq_nor = nq_nor
-        self.q_output = q_nor.output
-        self.nq_output = nq_nor.output
-        i = next(i for i, input in enumerate(mux.selected_inputs) if input == q_nor.output)
+        self.q_lut = q_lut
+        self.nq_lut = nq_lut
+        self.q_output = q_lut.output()
+        self.nq_output = nq_lut.output()
+        i = next(i for i, input in enumerate(mux.selected_inputs) if input == q_lut.output())
         self.nc_input = mux.selecting_inputs[i]
         self.c_input = mux.selecting_inputs[1 - i]
         self.d_input = mux.selected_inputs[1 - i]
-        self.set_inputs = [input for input in nq_nor.inputs if input != mux.output]
-        self.clr_inputs = [input for input in q_nor.inputs if input != nq_nor.output]
+        self.set_inputs = [input for input in nq_lut.inputs if input != mux.output()]
+        self.clr_inputs = [input for input in q_lut.inputs if input != nq_lut.output()]
         self.inputs = [self.d_input, self.c_input, self.nc_input]
 
 def only(items):
     """Returns the only element in a set or list of one element."""
-    assert(len(items) == 1)
+    assert len(items) == 1, "Oops, length of iterable in only() was {:d}.".format(len(items))
     return next(iter(items))
 
 
@@ -346,38 +461,49 @@ class Gates(object):
         self.pulled_up_nets = {q.nonvcc_electrode_net() for q in self.nmos_resistor_qs}
         self.power_nets = {net for net in self.nets.keys() if is_power_net(net)}
         self.ground_nets = {net for net in self.nets.keys() if is_ground_net(net)}
-        # Nets with definitive logic values.
+        # Nets with non-Z logic values.
         self.logic_nets = self.pulled_up_nets | self.power_nets | self.ground_nets
+        # Nets with potentially Z logic values.
+        self.unpowered_nets = set(nets.keys()) - self.logic_nets
 
         self.pulldowns = set()
         self.pass_qs = set()
+        self.luts = set()
         self.muxes = set()
         self.nors = set()
+        self.nands = set()
         self.tristate_inverters = set()
         self.tristate_buffers = set()
         self.mux_d_latches = set()
 
     def find_all_the_things(self):
+        lut_strategy = 2
+
         self.find_pulldowns()
-        self.find_pass_transistors()
         self.find_power_qs()
+        if lut_strategy == 2:
+            self.find_luts2()
+            self.find_pass_transistors2()
+        else:
+            self.find_pass_transistors()
+            self.find_luts()
         self.find_muxes()
-        for i in range(1, 10):
-            self.nmos_nor(i)
+        self.find_nors()
+        self.find_nands()
         self.find_tristate_inverters()
         self.find_tristate_buffers()
         self.find_mux_d_latches()
 
     def remove_q(self, q):
-        if q in self.grounding_qs:
-            self.grounding_qs.remove(q)
-        elif q in self.powered_qs:
-            self.powered_qs.remove(q)
-        self.qs_by_electrode_net[q.electrode0_net].remove(q)
-        self.qs_by_electrode_net[q.electrode1_net].remove(q)
-        self.qs_by_gate_net[q.gate_net].remove(q)
-        if q in self.nmos_resistor_qs:
-            self.nmos_resistor_qs.remove(q)
+        # if q in self.grounding_qs:
+        #     self.grounding_qs.remove(q)
+        # elif q in self.powered_qs:
+        #     self.powered_qs.remove(q)
+        # self.qs_by_electrode_net[q.electrode0_net].remove(q)
+        # self.qs_by_electrode_net[q.electrode1_net].remove(q)
+        # self.qs_by_gate_net[q.gate_net].remove(q)
+        # if q in self.nmos_resistor_qs:
+        #     self.nmos_resistor_qs.remove(q)
         self.qs.remove(q)
 
     def add_q(self, q):
@@ -465,24 +591,126 @@ class Gates(object):
         for g in self.pulldowns:
             self.remove_q(only(g.qs))
 
-    def find_pass_transistors(self):
-        self.pass_qs = {PassTransistor(q) for q in self.qs if (
-            not any(electrode in self.logic_nets for electrode in [q.electrode0_net, q.electrode1_net]))}
+    def find_luts2(self):
+        G = nx.Graph()
+        for i, q in enumerate(self.qs - self.nmos_resistor_qs):
+            if not q.is_powering():
+                if q.is_grounding():
+                    G.add_edge(q.nongrounded_electrode_net(), "GND___." + str(i), q=q)
+                else:
+                    G.add_edge(q.electrode0_net, q.electrode1_net, q=q)
+            if q.gate_net not in self.pulled_up_nets:
+                G.add_edge(q.gate_net, "__GATE__", q=q)
+
+        # find all simple paths from a pulled-up net to a gate.
+        pass_paths = []
+        for pullup_q, net in ((q, q.gate_net) for q in self.nmos_resistor_qs):
+            if net not in G:
+                continue
+            pass_paths.extend(list(nx.all_simple_paths(G, net, "__GATE__")))
+        print("{:d} paths lead from pullups to a gate.".format(len(pass_paths)))
+        for path in map(nx.utils.pairwise, pass_paths):
+            for edge in (edge for edge in path if G.has_edge(edge[0], edge[1])):
+                G.remove_edge(edge[0], edge[1])
+
+        for net in (net for net in nx.connected_components(G) if len(net & self.pulled_up_nets) == 1):
+            subgraph = G.subgraph(net).copy()
+            output_net = only(net & self.pulled_up_nets)
+            nmos_resistor_qs = self.qs_by_electrode_net[output_net] & self.nmos_resistor_qs
+            if len(nmos_resistor_qs) != 1:
+                print("Error: nonunique nmos resistor Q pulling up net {:s}. Qs are {:s}".format(
+                    output_net, str([q.name for q in nmos_resistor_qs])))
+                continue
+            nmos_resistor_q = only(nmos_resistor_qs)
+            grounds = [n for n in net if is_ground_net(n)]
+            if len(grounds) == 0:
+                print("Error: pulled up net {:s} (by Q {:s}) has no ground path".format(
+                    output_net, nmos_resistor_q.name))
+                continue
+            qs = {q for u, v, q in subgraph.edges.data('q')} | {nmos_resistor_q}
+            if len(qs) < 2:
+                continue
+            lut = Lut(nmos_resistor_q, output_net, qs)
+            self.luts.add(lut)
+
+        print("Identified {:d} luts using find_luts2".format(len(self.luts)))
+        for g in self.luts:
+            for q in g.qs:
+                self.remove_q(q)
+
+    def find_pass_transistors2(self):
+        for q in self.qs:
+            for e in [q.electrode0_net, q.electrode1_net]:
+                if e not in self.logic_nets:
+                    self.pass_qs.add(PassTransistor(q, e))
+                    break
+
+        print("Found {:d} pass transistors.".format(len(self.pass_qs)))
+
         for g in self.pass_qs:
             self.remove_q(only(g.qs))
 
+    # TODO: How about pin muxes? Those are not connected to a gate.
+    def find_pass_transistors(self):
+        """One electrode must be unpowered and connected to at least one gate."""
+        gate_nets = {q.gate_net for q in self.qs}
+
+        for q in self.qs:
+            for e in [q.electrode0_net, q.electrode1_net]:
+                if e not in self.logic_nets and e in gate_nets:
+                    self.pass_qs.add(PassTransistor(q, e))
+                    break
+
+        print("Found {:d} pass transistors.".format(len(self.pass_qs)))
+
+        for g in self.pass_qs:
+            self.remove_q(only(g.qs))
+
+    def find_luts(self):
+        #candidate_nets = self.pulled_up_nets
+
+        G = nx.Graph()
+        tmp = 0
+        for q in self.qs - self.nmos_resistor_qs:
+            if not q.is_powering():
+                if q.is_grounding():
+                    G.add_edge(q.nongrounded_electrode_net(), "GND___." + str(tmp), q=q)
+                    tmp += 1
+                else:
+                    G.add_edge(q.electrode0_net, q.electrode1_net, q=q)
+            if q.gate_net not in self.pulled_up_nets:
+                G.add_edge(q.gate_net, "__GATE__")
+
+        # We should now be able to ensure that starting from a pulled-up net, no
+        # path leads to __GATE__, and no paths lead to another pulled-up net. If
+        # true, then we've found a LUT. So basically we've got a self-contained set of nodes.
+        #
+        # If a path does lead to another pulled-up net, then likely we're passing through
+        # a pass transistor somewhere.
+
+        # net ({(Type, name)}): A connected component (the set of nodes connected to each other)
+        for net in (net for net in nx.connected_components(G) if len(net & self.pulled_up_nets) == 1 and "__GATE__" not in net):
+            subgraph = G.subgraph(net).copy()
+            output_net = only(net & self.pulled_up_nets)
+            nmos_resistor_q = only(self.qs_by_electrode_net[output_net] & self.nmos_resistor_qs)
+            qs = {q for u, v, q in subgraph.edges.data('q')} | {nmos_resistor_q}
+            lut = Lut(nmos_resistor_q, output_net, qs)
+            self.luts.add(lut)
+
+        print("Identified {:d} luts using find_luts".format(len(self.luts)))
+        for g in self.luts:
+            for q in g.qs:
+                self.remove_q(q)
+
     def find_muxes(self):
-        candidate_net_iter = self.all_nets_iter()
-        candidate_net_iter = self.unpowered_net_iter(candidate_net_iter)
+        pass_qs_by_output = set_dictionary(((q.output(), q) for q in self.pass_qs))
+        # Hopefully no value set overlaps.
 
         muxes = set()
-        for net in candidate_net_iter:
-            selection_qs = self.electrode_qs_in(net)
-            if len(selection_qs) < 2:
+        for output, qs in pass_qs_by_output.items():
+            if len(qs) < 2:
                 continue
-            opposite_electrode_nets = {q.opposite_electrode_net(net) for q in selection_qs}
-            if all(n in self.logic_nets for n in opposite_electrode_nets):
-                muxes.add(Multiplexer(net, selection_qs))
+            muxes.add(Multiplexer(output, list(qs)))
 
         # Upgrade muxes to power muxes. A power mux selects between power and ground.
         for mux in muxes:
@@ -494,33 +722,17 @@ class Gates(object):
                 self.muxes.add(mux)                
 
         for mux in self.muxes:
-            for q in mux.qs:
-                self.remove_q(q)
+            for pass_q in mux.subgates:
+                self.pass_qs.remove(pass_q)
 
         return self.muxes
 
-    def nmos_nor(self, n):
-        """Generator for finding nmos n-input nor gates (number of transistors: n+1).
+    def find_nors(self):
+        """Finds NOR gates from LUTs."""
+        self.nors = {NorGate(lut) for lut in self.luts if lut.is_nor()}
 
-        This algorithm is O(N) in the number of transistors.
-
-        Args:
-            n: The number of inputs to find.
-        Yields:
-            (Transistor, {Transistor}): A pair where the first transistor is the nmos
-                resistor, and the set is the set of grounding transistors comprising
-                the NOR gate.
-        """
-        candidate_net_iter = self.all_nets_iter()
-        candidate_net_iter = self.nets_with_n_electrodes_iter(n + 1, candidate_net_iter)
-        candidate_net_iter = self.nets_with_n_grounding_qs_iter(n, candidate_net_iter)
-        candidate_net_iter = self.nets_powered_by_nmos_resistor_iter(candidate_net_iter)
-
-        nors = {NorGate.from_net(net, self) for net in candidate_net_iter}
-
-        for nor in nors:
-            for q in nor.qs:
-                self.remove_q(q)
+        for nor in self.nors:
+            self.luts.remove(nor.lut)
 
         # See if any are high-drive. A high-drive NOR gate is a NOR gate whose output
         # feeds exactly two powered transistors (one is the gate's own nmos resistor), 
@@ -528,29 +740,32 @@ class Gates(object):
         # to exactly n grounding transistors, whose gates are connected to the gates of
         # the NOR's inputs.
 
-        nors = {self.maybe_upgrade_to_power_nor(nor) for nor in nors}
-        self.nors |= nors
-        return list(nors)
+        self.nors = {self.maybe_upgrade_to_power_nor(nor) for nor in self.nors}
 
-    def maybe_upgrade_to_power_nor(self, nor_gate):
+    def maybe_upgrade_to_power_nor(self, nor):
         power_muxes = (mux for mux in self.muxes if type(mux) is PowerMultiplexer)
         for mux in power_muxes:
             # Are all the power selectors set to the nor gate's output?
-            if set(mux.high_inputs) != {nor_gate.output}:
+            if set(mux.high_inputs) != {nor.output()}:
                 continue
 
             # Are all the ground selectors set to the nor gate's inputs, and are
             # all inputs represented?
-            if set(mux.low_inputs) != set(nor_gate.inputs):
+            if set(mux.low_inputs) != set(nor.inputs):
                 continue
-
-            print("Power NOR {:d} identified at {:s}".format(len(nor_gate.inputs), str(mux.output_power_q.centroid)))
-            nor_gate = PowerNorGate(nor_gate, mux, mux.output)
+            nor = PowerNorGate(nor, mux, mux.output())
             break
 
-        if type(nor_gate) == PowerNorGate:
-            self.muxes.remove(nor_gate.mux)
-        return nor_gate
+        if type(nor) == PowerNorGate:
+            self.muxes.remove(nor.mux)
+        return nor
+
+    def find_nands(self):
+        """Finds NAND gates from LUTs."""
+        self.nands = {Nand(lut) for lut in self.luts if lut.is_nand()}
+
+        for nand in self.nands:
+            self.luts.remove(nand.lut)
 
     def find_tristate_inverters(self):
         """Finds tristate inverters. This is O(N).
@@ -572,24 +787,19 @@ class Gates(object):
         muxes = {g for g in self.muxes if type(g) == PowerMultiplexer and len(g.selected_inputs) == 2}
 
         # Map the inverters and nors
-        invs_by_output = {inv.output: inv for inv in invs}
+        invs_by_output = {inv.output(): inv for inv in invs}
         invs_by_input = set_dictionary((inv.input(), inv) for inv in invs)
 
-        nor2_by_output = {nor.output: nor for nor in nor2s}
+        nor2_by_output = {nor.output(): nor for nor in nor2s}
         nor2s_by_input = set_dictionary((input, nor) 
             for nor in nor2s 
             for input in nor.inputs)
 
         # Go through the muxes fed by pairs of nors that also have one common input (/oe).
         for mux in muxes:
-            print("Mux @ {:s}".format(str(mux.output_power_q.centroid)))
             # The mux must be fed by nor2s.
             if not all(input in nor2_by_output for input in mux.selecting_inputs):
                 continue
-
-            print("Mux passes A")
-            print("high_inputs: {:s}".format(str(mux.high_inputs)))
-            print("low_inputs: {:s}".format(str(mux.low_inputs)))
 
             # The nor2s must have one common input (/oe).
             high_nor = nor2_by_output[only(mux.high_inputs)]
@@ -600,22 +810,16 @@ class Gates(object):
             if len(common_inputs) != 1:
                 continue
 
-            print("Mux passes B")
-
             # The low nor's other input must be the output of an inverter.
             low_nor_input = only(low_nor_inputs - common_inputs)
             inv = invs_by_output.get(low_nor_input)
             if inv is None:
                 continue
 
-            print("Mux passes C")
-            
             # The inverter's input must also be the high nor's other input.
             if inv.input() != only(high_nor_inputs - common_inputs):
                 continue
 
-            print("Mux passes D")
-            
             # TODO: make sure the thing is self-contained: the inverter's output
             # feeds no other input, and the nors' outputs feed nothing other than the
             # mux. This requires an output -> gate/q map.
@@ -652,10 +856,10 @@ class Gates(object):
         muxes = {g for g in self.muxes if type(g) == PowerMultiplexer and len(g.selected_inputs) == 2}
 
         # Map the inverters and nors
-        invs_by_output = {inv.output: inv for inv in invs}
+        invs_by_output = {inv.output(): inv for inv in invs}
         invs_by_input = set_dictionary((inv.input(), inv) for inv in invs)
 
-        nor2_by_output = {nor.output: nor for nor in nor2s}
+        nor2_by_output = {nor.output(): nor for nor in nor2s}
         nor2s_by_input = set_dictionary((input, nor) 
             for nor in nor2s 
             for input in nor.inputs)
@@ -686,7 +890,7 @@ class Gates(object):
                 continue
 
             noe = only(common_inputs)
-            self.tristate_buffers.add(TristateInverter(inv, high_nor, low_nor, mux, noe))
+            self.tristate_buffers.add(TristateBuffer(inv, high_nor, low_nor, mux, noe))
 
         for g in self.tristate_buffers:
             self.nors.remove(g.inverter)
@@ -716,17 +920,41 @@ class Gates(object):
         # Get just those muxes that go in the gate.
         muxes = {g for g in self.muxes if type(g) != PowerMultiplexer and len(g.selected_inputs) == 2}
 
+        # for mux in muxes:
+        #     q_nor = next((nor for nor in self.nors if any(mux_input == nor.output() for mux_input in mux.selected_inputs)), None)
+        #     if q_nor is None:
+        #         continue
+        #     nq_nor_candidates = (nor for nor in self.nors if any(nor_input == mux.output() for nor_input in nor.inputs))
+        #     nq_nor_candidates = [nor for nor in nq_nor_candidates if any(qnor_input == nor.output() for qnor_input in q_nor.inputs)]
+        #     if len(nq_nor_candidates) != 1:
+        #         continue
+        #     self.mux_d_latches.add(MuxDLatch(mux, q_nor, only(nq_nor_candidates)))
+
+        # for g in self.mux_d_latches:
+        #     self.nors.remove(g.q_nor)
+        #     self.nors.remove(g.nq_nor)
+        #     self.muxes.remove(g.mux)
+
+        luts = [lut for lut in self.luts if len(lut.neg_ens) > 0]
+        luts.extend(self.nors)
         for mux in muxes:
-            q_nor = next((nor for nor in self.nors if any(mux_input == nor.output for mux_input in mux.selected_inputs)), None)
-            if q_nor is None:
+            q_luts = (lut for lut in luts if any(mux_input == lut.output() for mux_input in mux.selected_inputs))
+            for q_lut in q_luts:
+                nq_lut_candidates = (lut for lut in luts if any(neg_en == mux.output() for neg_en in lut.neg_ens))
+                nq_lut_candidates = [lut for lut in nq_lut_candidates if any(neg_en == lut.output() for neg_en in q_lut.neg_ens)]
+                if len(nq_lut_candidates) != 1:
+                    continue
+                self.mux_d_latches.add(MuxDLatch(mux, q_lut, only(nq_lut_candidates)))
                 continue
-            nq_nor_candidates = (nor for nor in self.nors if any(nor_input == mux.output for nor_input in nor.inputs))
-            nq_nor_candidates = [nor for nor in nq_nor_candidates if any(qnor_input == nor.output for qnor_input in q_nor.inputs)]
-            if len(nq_nor_candidates) != 1:
-                continue
-            self.mux_d_latches.add(MuxDLatch(mux, q_nor, only(nq_nor_candidates)))
 
         for g in self.mux_d_latches:
-            self.nors.remove(g.q_nor)
-            self.nors.remove(g.nq_nor)
+            if type(g.q_lut) == NorGate:
+                self.nors.remove(g.q_lut)
+            else:
+                self.luts.remove(g.q_lut)
+            if type(g.nq_lut) == NorGate:
+                self.nors.remove(g.nq_lut)
+            else:
+                self.luts.remove(g.nq_lut)
             self.muxes.remove(g.mux)
+
