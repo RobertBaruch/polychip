@@ -312,7 +312,7 @@ class PolychipTestCase(unittest.TestCase):
         self.assertEqual(set(mux.inputs), {"X0", "X1", "S0", "S1"})
         self.assertEqual(mux.output(), "Y")
         self.assertEqual(mux.num_qs(), 2)
-        self.assertEqual(len(gates.qs), 2)
+        self.assertEqual(len(gates.qs), 0)
 
     def test_find_power_mux(self):
         filename = "test/polychip_test_power_mux.svg"

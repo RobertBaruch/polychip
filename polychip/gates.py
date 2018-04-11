@@ -138,6 +138,9 @@ class Gate(object):
     def output(self):
         return only(self.outputs)
 
+    def q(self):
+        return only(self.qs)
+
     def num_qs(self):
         return (sum(q.num_qs() for q in self.qs if type(q) == ParallelTransistor) +
             sum(1 for q in self.qs if type(q) != ParallelTransistor))
@@ -215,6 +218,13 @@ class Pulldown(Gate):
     """A resistor to ground, formed by an NMOS transistor."""
     def __init__(self, q):
         super().__init__(q, [], [q.nongrounded_electrode_net()], {q})
+
+
+class Pullup(Gate):
+    """A resistor to power, formed by an NMOS transistor. These are the ones that couldn't be included
+    in logic gates, so are likely just pin pullups and the like."""
+    def __init__(self, q):
+        super().__init__(q, [], [q.nonvcc_electrode_net()], {q})
 
 
 class Multiplexer(Gate):
@@ -457,7 +467,7 @@ class Gates(object):
 
         self.grounding_qs = {q for q in qs if q.is_grounding()}
         self.powered_qs = {q for q in qs if q.is_powering()}
-        self.nmos_resistor_qs = {q for q in self.powered_qs if q.gate_net == q.nonvcc_electrode_net()}
+        self.nmos_resistor_qs = {q for q in self.powered_qs if q.gate_net == q.nonvcc_electrode_net() or is_power_net(q.gate_net)}
         self.pulled_up_nets = {q.nonvcc_electrode_net() for q in self.nmos_resistor_qs}
         self.power_nets = {net for net in self.nets.keys() if is_power_net(net)}
         self.ground_nets = {net for net in self.nets.keys() if is_ground_net(net)}
@@ -467,6 +477,7 @@ class Gates(object):
         self.unpowered_nets = set(nets.keys()) - self.logic_nets
 
         self.pulldowns = set()
+        self.pullups = set()
         self.pass_qs = set()
         self.luts = set()
         self.muxes = set()
@@ -493,6 +504,7 @@ class Gates(object):
         self.find_tristate_inverters()
         self.find_tristate_buffers()
         self.find_mux_d_latches()
+        self.find_pullups()
 
     def remove_q(self, q):
         # if q in self.grounding_qs:
@@ -589,7 +601,12 @@ class Gates(object):
     def find_pulldowns(self):
         self.pulldowns = {Pulldown(q) for q in self.grounding_qs if is_ground_net(q.gate_net)}
         for g in self.pulldowns:
-            self.remove_q(only(g.qs))
+            self.remove_q(g.q())
+
+    def find_pullups(self):
+        self.pullups = {Pullup(q) for q in self.qs & self.nmos_resistor_qs}
+        for g in self.pullups:
+            self.remove_q(g.q())
 
     def find_luts2(self):
         G = nx.Graph()
@@ -604,7 +621,7 @@ class Gates(object):
 
         # find all simple paths from a pulled-up net to a gate.
         pass_paths = []
-        for pullup_q, net in ((q, q.gate_net) for q in self.nmos_resistor_qs):
+        for pullup_q, net in ((q, q.nonvcc_electrode_net()) for q in self.nmos_resistor_qs):
             if net not in G:
                 continue
             pass_paths.extend(list(nx.all_simple_paths(G, net, "__GATE__")))
@@ -619,13 +636,13 @@ class Gates(object):
             nmos_resistor_qs = self.qs_by_electrode_net[output_net] & self.nmos_resistor_qs
             if len(nmos_resistor_qs) != 1:
                 print("Error: nonunique nmos resistor Q pulling up net {:s}. Qs are {:s}".format(
-                    output_net, str([q.name for q in nmos_resistor_qs])))
+                    output_net, str(["{:s} @ {:s}".format(q.name, str(q.centroid)) for q in nmos_resistor_qs])))
                 continue
             nmos_resistor_q = only(nmos_resistor_qs)
             grounds = [n for n in net if is_ground_net(n)]
             if len(grounds) == 0:
-                print("Error: pulled up net {:s} (by Q {:s}) has no ground path".format(
-                    output_net, nmos_resistor_q.name))
+                print("Error: pulled up net {:s} (by Q {:s} @ {:s}) has no ground path".format(
+                    output_net, nmos_resistor_q.name, str(nmos_resistor_q.centroid)))
                 continue
             qs = {q for u, v, q in subgraph.edges.data('q')} | {nmos_resistor_q}
             if len(qs) < 2:
@@ -648,7 +665,7 @@ class Gates(object):
         print("Found {:d} pass transistors.".format(len(self.pass_qs)))
 
         for g in self.pass_qs:
-            self.remove_q(only(g.qs))
+            self.remove_q(g.q())
 
     # TODO: How about pin muxes? Those are not connected to a gate.
     def find_pass_transistors(self):
@@ -664,7 +681,7 @@ class Gates(object):
         print("Found {:d} pass transistors.".format(len(self.pass_qs)))
 
         for g in self.pass_qs:
-            self.remove_q(only(g.qs))
+            self.remove_q(g.q())
 
     def find_luts(self):
         #candidate_nets = self.pulled_up_nets

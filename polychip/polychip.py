@@ -64,11 +64,30 @@ def calculate_contacts(drawing):
     Contacts are determined only after transistors are found.
     """
     cs = []
+
+    poly_rtree = shapely.strtree.STRtree(drawing.poly_array)
+    poly_dict = {}
+    for i, poly in enumerate(drawing.poly_array):
+        poly_dict[poly.wkb] = i
+
+    diff_rtree = shapely.strtree.STRtree(drawing.diff_array)
+    diff_dict = {}
+    for i, diff in enumerate(drawing.diff_array):
+        diff_dict[diff.wkb] = i
+
+    metal_rtree = shapely.strtree.STRtree(drawing.metal_array)
+    metal_dict = {}
+    for i, metal in enumerate(drawing.metal_array):
+        metal_dict[metal.wkb] = i
+
     for id, c in drawing.contact_paths.items():
         contact = Contact(id, c)
-        contact.metal = next( (i for i, p in enumerate(drawing.metal_array) if p.intersects(c)), None)
-        contact.diff = next( (i for i, p in enumerate(drawing.diff_array) if p.intersects(c)), None)
-        contact.poly = next( (i for i, p in enumerate(drawing.poly_array) if p.intersects(c)), None)
+        contact.poly = next ((poly_dict[p.wkb] for p in poly_rtree.query(c) if p.intersects(c)), None)
+        contact.diff = next ((diff_dict[p.wkb] for p in diff_rtree.query(c) if p.intersects(c)), None)
+        contact.metal = next ((metal_dict[p.wkb] for p in metal_rtree.query(c) if p.intersects(c)), None)
+        # contact.metal = next( (i for i, p in enumerate(drawing.metal_array) if p.intersects(c)), None)
+        # contact.diff = next( (i for i, p in enumerate(drawing.diff_array) if p.intersects(c)), None)
+        # contact.poly = next( (i for i, p in enumerate(drawing.poly_array) if p.intersects(c)), None)
         if contact.metal is not None and contact.diff is not None and contact.poly is not None:
             contact.metal = None
         count = 0
@@ -83,7 +102,7 @@ def calculate_contacts(drawing):
             count += 1
             contacted = "Poly"
         if count != 2:
-            print("Warning: {:s} contact at {:s} has no connection".format(contacted, str(c)))
+            print("Warning: {:s} contact at {:s} has no connection".format(contacted, str(c.representative_point())))
         else:
             cs.append(contact)
     print("{:d} valid contacts".format(len(cs)))
@@ -270,25 +289,22 @@ def file_to_netlist(file, print_netlist=False, print_qs=False):
         if index is not None:
             sigs[Type.METAL][index] = sname.text
             sig_multimap[sname.text].add((Type.METAL, index))
-            print("Attached signal '{:s}' to {:s}".format(sname.text, str((Type.METAL, index))))
             continue
 
         index = next( (i for i, p in enumerate(drawing.poly_array) if p.contains(spoint)), None)
         if index is not None:
             sigs[Type.POLY][index] = sname.text
             sig_multimap[sname.text].add((Type.POLY, index))
-            print("Attached signal '{:s}' to {:s}".format(sname.text, str((Type.POLY, index))))
             continue
 
         index = next( (i for i, p in enumerate(drawing.diff_array) if p.contains(spoint)), None)
         if index is not None:
             sigs[Type.DIFF][index] = sname.text
             sig_multimap[sname.text].add((Type.DIFF, index))
-            print("Attached signal '{:s}' to {:s}".format(sname.text, str((Type.DIFF, index))))
             continue
 
-        print("Warning: label '{:s}' at {:s} not attached to anything".format(
-            sname.text, str(spoint)))
+        print("Warning: label '{:s}' at {:s} not attached to anything".format(sname.text, str(spoint)))
+
     t2 = datetime.datetime.now()
     print("Attached {:d} signal names (in {:f} sec)".format(len(drawing.snames), (t2 - t1).total_seconds()))
 
@@ -297,7 +313,6 @@ def file_to_netlist(file, print_netlist=False, print_qs=False):
         index = next( (i for i, q in enumerate(qs) if q.gate_shape.intersects(qname.extents)), None)
         if index is not None:
             qs[index].name = qname.text
-            print("Assigned transistor name " + qname.text)
         else:
             print("Error: transistor name {:s} at {:s} doesn't intersect a gate.".format(
                 qname.text, str(qname.extents.coords[0])))
@@ -341,28 +356,39 @@ def file_to_netlist(file, print_netlist=False, print_qs=False):
 
     qs_by_name = {q.name: q for q in qs}
 
+    # Give each net a name. If one of the components in the net has a signal name, use that. If we
+    # end up with more than one signal name in a net, then that's sometimes okay, since maybe you
+    # didn't realize the two signals were connected. But if you end up with a signal connected to
+    # a power or ground signal name, then you probably didn't want that, so exit.
+    #
+    # And of course, if a net contains both power and ground, you just shorted the thing out, so
+    # exit there, too.
     nets = {}
     anonymous_net = 0
-    # net ({(Type, name)}): A connected component (the set of nodes connected to each other)
+    # net ({(Type, int)}): A connected component (the set of nodes connected to each other)
     for net in nx.connected_components(G):
         netname = None
+        netnode = None
         signames = set()
-        for nodetype, nodename in net:
-            if nodetype in sigs and sigs[nodetype][nodename] is not None:
-                node_signame = sigs[nodetype][nodename]
+        for node in net:
+            nodetype, index = node
+            if nodetype in sigs and sigs[nodetype][index] is not None:
+                node_signame = sigs[nodetype][index]
                 signames.add(node_signame)
                 if netname is not None and netname != node_signame:
-                    print("Warning: component {:s} is named '{:s}' but is connected to '{:s}'".format(
-                        str((nodetype, nodename)), node_signame, netname))
+                    print("Warning: component {:s} is named '{:s}' but is connected to component {:s} named '{:s}'".format(
+                        str(node), node_signame, str(netnode), netname))
                     if is_power_net(netname) or is_ground_net(netname) or is_power_net(node_signame) or is_ground_net(node_signame):
-                        node_path = nx.shortest_path(G, node_signame, netname)
                         print("You probably didn't want that. Further analysis is pointless.")
-                        print("Here is the path in question:")
-                        print("------")
+                        node_path = nx.shortest_path(G, node, netnode)
+                        print("Here is a path from {:s} to {:s}:".format(node_signame, netname))
+                        print(node_path)
+                        print("----")
                         print_node_path(node_path, drawing)
                         sys.exit(1)
                 else:
                     netname = node_signame
+                    netnode = node
 
         # power/ground short detection
         has_power_node = any((is_power_net(n) for n in signames))
@@ -453,6 +479,8 @@ if __name__ == "__main__":
                         help="input Inkscape SVG file")
     parser.add_argument("--sch", action="store_true",
                         help="whether to generate a KiCAD .sch file")
+    parser.add_argument("--qwires", action="store_true",
+                        help="whether to show wires to transistor electrodes in the schematic (gate wires are always shown)")
     parser.add_argument("--nets", action="store_true",
                         help="whether to print the netlist")
     parser.add_argument("--qs", action="store_true",
@@ -491,8 +519,9 @@ if __name__ == "__main__":
         sum(g.num_qs() for g in gates.mux_d_latches),
         str(list(g.output_power_q.name for g in gates.mux_d_latches))))
 
-    print("{:d} unallocated transistors".format(len(gates.qs)))
+    print("{:d} unallocated transistors:".format(len(gates.qs)))
+    for q in gates.qs:
+        print("  {:s} @ {:s}".format(q.name, str(q.centroid)))
 
     if args.sch:
-        inkscape_to_sch_transform = sch_size_transform(drawing)
-        write_sch_file("polychip.sch", gates, inkscape_to_sch_transform)
+        write_sch_file("polychip.sch", drawing, gates, args.qwires)

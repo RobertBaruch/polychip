@@ -23,6 +23,7 @@ class SchObject(object):
         self.libname = ""
         self.short_libname = ""
         self.name_offset = (0, 0)
+        self.name_orientation = "H"
         self.rotation = 0  # In 90-degree intervals
         self.centroid = centroid
         self.output_offsets = []  # tuple of x,y, ordered same as gate
@@ -43,8 +44,8 @@ class SchObject(object):
         x = round(self.sch_loc.x)
         y = round(self.sch_loc.y)
         print("P {:d} {:d}".format(x, y), file=f)
-        print("F 0 \"{:s}\" H {:d} {:d} 20  0000 C CNN".format(
-            self.name, x + self.name_offset[0], y + self.name_offset[1]), file=f)
+        print("F 0 \"{:s}\" {:s} {:d} {:d} 20  0000 C CNN".format(
+            self.name, self.name_orientation, x + self.name_offset[0], y + self.name_offset[1]), file=f)
         libname_x = x
         libname_y = y
         libname_invisible = "1"
@@ -101,6 +102,49 @@ class SchGround(SchObject):
         self.short_libname = "GND"
         self.name_offset = (0, -80)
         self.rotation = rotation
+
+
+class SchPulldown(SchObject):
+    def __init__(self, gate):
+        super().__init__(gate, gate.name, gate.q().centroid)
+        self.libname = "Pulldown"
+        self.short_libname = "R"
+        self.input_offsets = [(0, 0)]
+        self.output_offsets = [(0, 0)]
+        self.input_nets = [gate.q().nongrounded_electrode_net()]
+        self.output_nets = [gate.q().nongrounded_electrode_net()]
+        self.name_offset = (0, -115)
+        self.name_orientation = "V"
+
+
+class SchPullup(SchObject):
+    def __init__(self, gate):
+        super().__init__(gate, gate.name, gate.q().centroid)
+        self.libname = "Pullup"
+        self.short_libname = "R"
+        self.input_offsets = [(0, 0)]
+        self.output_offsets = [(0, 0)]
+        self.input_nets = [gate.q().nonvcc_electrode_net()]
+        self.output_nets = [gate.q().nonvcc_electrode_net()]
+        self.name_offset = (0, 115)
+        self.name_orientation = "V"
+
+
+class SchPin(SchObject):
+    def __init__(self, label, rotation):
+        super().__init__(label, label.text, label.center)
+        self.rotation = rotation
+        if not is_power_net(label.text) and not is_ground_net(label.text):
+            self.output_offsets = [(0, 0)]
+            self.input_offsets = [(0, 0)]
+            self.output_nets = [label.text]
+            self.input_nets = [label.text]
+
+    def write_component(self, f):
+        x = round(self.sch_loc.x)
+        y = round(self.sch_loc.y)
+        print("Text GLabel {:d} {:d} {:d} 50 BiDi ~ 0".format(x, y, self.rotation), file=f)
+        print(self.name, file=f)
 
 
 class SchGate(SchObject):
@@ -202,7 +246,7 @@ def write_wire(f, output_loc, output_offset, input_loc, input_offset):
     print("    {:d} {:d} {:d} {:d}".format(x1, y1, x2, y2), file=f)
 
 
-def write_sch_file(filename, gates, inkscape_to_sch_transform):
+def write_sch_file(filename, drawing, gates, qwires=False):
     with open(filename, 'wt', encoding='utf-8') as f:
         print("EESchema Schematic File Version 4", file=f)
         print("EELAYER 26 0", file=f)
@@ -220,14 +264,17 @@ def write_sch_file(filename, gates, inkscape_to_sch_transform):
         print("Comment4 \"\"", file=f)
         print("$EndDescr", file=f)
 
-        SchObject.inkscape_to_sch_transform = inkscape_to_sch_transform
+        SchObject.inkscape_to_sch_transform = sch_size_transform(drawing)
         sch_objects = {}
 
         for q in gates.qs:
             sch_objects[q.name] = SchTransistor(q)
 
         for g in gates.pulldowns:
-            sch_objects[only(g.qs).name] = SchTransistor(only(g.qs))
+            sch_objects[g.name] = SchPulldown(g)
+
+        for g in gates.pullups:
+            sch_objects[g.name] = SchPullup(g)
 
         for g in gates.pass_qs:
             sch_objects[g.name] = SchGate(g)
@@ -275,6 +322,9 @@ def write_sch_file(filename, gates, inkscape_to_sch_transform):
                 for q in g.qs:
                     sch_objects[q.name] = SchTransistor(q)
 
+        for label in drawing.pnames:
+            sch_objects["__LABEL__" + label.text] = SchPin(label, 0)
+
         for sch_object in sch_objects.values():
             sch_object.write_component(f)
 
@@ -286,10 +336,10 @@ def write_sch_file(filename, gates, inkscape_to_sch_transform):
             for output in o.output_nets:
                 sch_objects_by_output_net[output].add(o)
 
-        for net, os in sch_objects_by_output_net.items():
-            print("output net {:s} -> {:d}".format(net, len(os)))
-        for net, os in sch_objects_by_input_net.items():
-            print("input net {:s} -> {:d}".format(net, len(os)))
+        # for net, os in sch_objects_by_output_net.items():
+        #     print("output net {:s} -> {:d}".format(net, len(os)))
+        # for net, os in sch_objects_by_input_net.items():
+        #     print("input net {:s} -> {:d}".format(net, len(os)))
 
         for o in sch_objects.values():
             for i, output_offset in enumerate(o.output_offsets):
@@ -298,7 +348,5 @@ def write_sch_file(filename, gates, inkscape_to_sch_transform):
                     for ii, input_net in enumerate(input_obj.input_nets):
                         if input_net == output_net:
                             write_wire(f, o.sch_loc, output_offset, input_obj.sch_loc, input_obj.input_offsets[ii])
-
-
 
         print("$EndSCHEMATC", file=f)

@@ -26,12 +26,16 @@ def coerce_multipoly(poly):
 @unique
 class Layer(Enum):
     """ Types of layers."""
-    METAL = 1
-    POLY = 2
-    DIFF = 3
-    CONTACTS = 4
-    QNAMES = 5
-    SNAMES = 6
+    METAL = "Metal"
+    POLY = "Poly"
+    DIFF = "Diff"
+    CONTACTS = "Contacts"
+    QNAMES = "QNames"
+    SNAMES ="SNames"
+    PNAMES ="PNames"
+
+    def path(self):
+        return "./svg:g[@inkscape:groupmode='layer'][@inkscape:label='" + self.value + "']"
 
 
 class Label(object):
@@ -60,17 +64,20 @@ class InkscapeFile:
             represents the center position of a rectangular contact.
         qnames([Label]): The list of found transistor labels.
         snames([Label]): The list of found signal labels.
+        pnames([Label]): The list of found pin labels.
         poly_array([shapely.geometry.Polygon]): The list of found polysilicon polygons.
         metal_array([shapely.geometry.Polygon]): The list of found metal polygons.
         diff_array([shapely.geometry.Polygon]): The list of found diff polygons.
             Note that this will be altered in a later stage when transistors are found.
+        multicontact(shapely.geometry.MultiPolygon): All the found contact polygons.
         multipoly(shapely.geometry.MultiPolygon): All the found polysilicon polygons.
         multidiff(shapely.geometry.MultiPolygon): All the found diffusion polygons.
+        multimetal(shapely.geometry.MultiPolygon): All the found metal polygons.
     """
     def __init__(self, root):
-        # self.contacts = None
         self.qnames = []
         self.snames = []
+        self.pnames = []
         self.contact_array = []
         self.poly_array = []
         self.metal_array = []
@@ -88,7 +95,8 @@ class InkscapeFile:
             Layer.METAL: self.to_screen_coords_transform_,
             Layer.DIFF: self.to_screen_coords_transform_,
             Layer.QNAMES: self.to_screen_coords_transform_,
-            Layer.SNAMES: self.to_screen_coords_transform_
+            Layer.SNAMES: self.to_screen_coords_transform_,
+            Layer.PNAMES: self.to_screen_coords_transform_,
         }
 
         self.contact_paths = {}
@@ -98,40 +106,37 @@ class InkscapeFile:
 
         layer = {}
 
-        layer[Layer.CONTACTS] = root.findall(InkscapeFile.layer_path("Contacts"), namespaces)[0]
-        layer[Layer.POLY] = root.findall(InkscapeFile.layer_path("Poly"), namespaces)[0]
-        layer[Layer.DIFF] = root.findall(InkscapeFile.layer_path("Diff"), namespaces)[0]
-        layer[Layer.METAL] = root.findall(InkscapeFile.layer_path("Metal"), namespaces)[0]
-        layer[Layer.QNAMES] = root.findall(InkscapeFile.layer_path("QNames"), namespaces)[0]
-        layer[Layer.SNAMES] = root.findall(InkscapeFile.layer_path("SNames"), namespaces)[0]
+        layer[Layer.CONTACTS] = root.findall(Layer.CONTACTS.path(), namespaces)[0]
+        layer[Layer.POLY] = root.findall(Layer.POLY.path(), namespaces)[0]
+        layer[Layer.DIFF] = root.findall(Layer.DIFF.path(), namespaces)[0]
+        layer[Layer.METAL] = root.findall(Layer.METAL.path(), namespaces)[0]
 
-        for y in Layer:
+        namelayer = root.findall(Layer.QNAMES.path(), namespaces)
+        if len(namelayer) > 0:
+            layer[Layer.QNAMES] = namelayer[0]
+        namelayer = root.findall(Layer.SNAMES.path(), namespaces)
+        if len(namelayer) > 0:
+            layer[Layer.SNAMES] = namelayer[0]
+        namelayer = root.findall(Layer.PNAMES.path(), namespaces)
+        if len(namelayer) > 0:
+            layer[Layer.PNAMES] = namelayer[0]
+
+        for y in (y for y in Layer if y in layer):
             t = Transform.parse(layer[y].get('transform'))
             self.transform[y] = self.transform[y] @ t
         shapes = {}
 
-        shapes[Layer.CONTACTS] = root.findall(InkscapeFile.layer_path("Contacts") + "/svg:path", namespaces)
-        shapes[Layer.CONTACTS] += root.findall(InkscapeFile.layer_path("Contacts") + "/svg:rect", namespaces)
-        shapes[Layer.POLY] = root.findall(InkscapeFile.layer_path("Poly") + "/svg:path", namespaces)
-        shapes[Layer.POLY] += root.findall(InkscapeFile.layer_path("Poly") + "/svg:rect", namespaces)
-        shapes[Layer.DIFF] = root.findall(InkscapeFile.layer_path("Diff") + "/svg:path", namespaces)
-        shapes[Layer.DIFF] += root.findall(InkscapeFile.layer_path("Diff") + "/svg:rect", namespaces)
-        shapes[Layer.METAL] = root.findall(InkscapeFile.layer_path("Metal") + "/svg:path", namespaces)
-        shapes[Layer.METAL] += root.findall(InkscapeFile.layer_path("Metal") + "/svg:rect", namespaces)
-        shapes[Layer.QNAMES] = root.findall(InkscapeFile.layer_path("QNames") + "/svg:text", namespaces)
-        shapes[Layer.SNAMES] = root.findall(InkscapeFile.layer_path("SNames") + "/svg:text", namespaces)
-
-        # contact_array = []
-        # contact_transform = self.transform[Layer.CONTACTS].to_shapely_transform()
-        # for c in shapes[Layer.CONTACTS]:
-        #     pt = shapely.geometry.Point(
-        #         float(c.get('x')) + float(c.get('width'))/2,
-        #         float(c.get('y')) + float(c.get('height'))/2)
-        #     pt = shapely.affinity.affine_transform(pt, contact_transform)
-        #     contact_array.append(pt)
-        # self.contacts = shapely.geometry.MultiPoint(contact_array)
-
-        # print("{:d} contacts".format(len(self.contacts)))
+        shapes[Layer.CONTACTS] = root.findall(Layer.CONTACTS.path() + "/svg:path", namespaces)
+        shapes[Layer.CONTACTS] += root.findall(Layer.CONTACTS.path() + "/svg:rect", namespaces)
+        shapes[Layer.POLY] = root.findall(Layer.POLY.path() + "/svg:path", namespaces)
+        shapes[Layer.POLY] += root.findall(Layer.POLY.path() + "/svg:rect", namespaces)
+        shapes[Layer.DIFF] = root.findall(Layer.DIFF.path() + "/svg:path", namespaces)
+        shapes[Layer.DIFF] += root.findall(Layer.DIFF.path() + "/svg:rect", namespaces)
+        shapes[Layer.METAL] = root.findall(Layer.METAL.path() + "/svg:path", namespaces)
+        shapes[Layer.METAL] += root.findall(Layer.METAL.path() + "/svg:rect", namespaces)
+        shapes[Layer.QNAMES] = root.findall(Layer.QNAMES.path() + "/svg:text", namespaces)
+        shapes[Layer.SNAMES] = root.findall(Layer.SNAMES.path() + "/svg:text", namespaces)
+        shapes[Layer.PNAMES] = root.findall(Layer.PNAMES.path() + "/svg:text", namespaces)
 
         print("Processing {:d} contact paths".format(len(shapes[Layer.CONTACTS])))
         for p in shapes[Layer.CONTACTS]:
@@ -157,6 +162,12 @@ class InkscapeFile:
         print("Processing snames text")
         for t in shapes[Layer.SNAMES]:
             text, extents = parse_shapely_text(t, self.transform[Layer.SNAMES])
+            self.snames.append(Label(text, extents))
+
+        print("Processing pnames text")
+        for t in shapes[Layer.PNAMES]:
+            text, extents = parse_shapely_text(t, self.transform[Layer.PNAMES])
+            self.pnames.append(Label(text, extents))
             self.snames.append(Label(text, extents))
 
         print("Merging overlapping sections. Before merge:")
@@ -193,6 +204,7 @@ class InkscapeFile:
 
         print("{:d} qnames".format(len(self.qnames)))
         print("{:d} snames".format(len(self.snames)))
+        print("{:d} pnames".format(len(self.pnames)))
 
 
     def extract_screen_transform(self, root):
@@ -242,10 +254,6 @@ class InkscapeFile:
         self.diff_array = diffs
         list.sort(self.diff_array, key = functools.cmp_to_key(InkscapeFile.poly_cmp))
 
-
-    @staticmethod
-    def layer_path(name):
-        return "./svg:g[@inkscape:groupmode='layer'][@inkscape:label='" + name + "']"
 
     @staticmethod
     def poly_cmp(poly1, poly2):

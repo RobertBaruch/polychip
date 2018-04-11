@@ -1,3 +1,10 @@
+# v0.6 (10 Apr 2018)
+* Adds pullup recognition
+* Adds PNames layer for labeling pins. Pins are also signals, so no need to include the name on the SNames layer.
+* Speeds up contact finding from O(N^2) to O(N log N).
+* Errors out with diagnostics if a non-power/non-ground signal name connects to a power or ground net, since you probably didn't want that.
+* Adds pulldowns, pullups, and pins on the schematic.
+
 # v0.5 (28 Mar 2018)
 * Combinatorial gate recognition ("Look-Up Table", or LUT)
 * Improved pass transistor recognition algorithm
