@@ -1,3 +1,7 @@
+# v0.7 (14 Apr 2018)
+* Adds 5-NOR and 6-NOR schematic symbols.
+* Adds a powermux schematic symbol.
+
 # v0.6 (10 Apr 2018)
 * Adds pullup recognition
 * Adds PNames layer for labeling pins. Pins are also signals, so no need to include the name on the SNames layer.

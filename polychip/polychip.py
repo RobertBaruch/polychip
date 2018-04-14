@@ -5,6 +5,7 @@ import re
 import networkx as nx
 import shapely.ops
 import shapely.strtree
+import statistics
 import functools
 import pprint
 from enum import Enum, unique
@@ -272,6 +273,14 @@ def file_to_netlist(file, print_netlist=False, print_qs=False):
     t2 = datetime.datetime.now()
     print("Located {:d} transistors (in {:f} sec)".format(len(qs), (t2 - t1).total_seconds()))
 
+    areas = [q.gate_shape.area for q in qs]
+    if len(areas) > 2:
+        areas.sort()
+        print("Mean gate area {:f} px^2".format(statistics.mean(areas)))
+        print("Median gate area {:f} px^2".format(statistics.median(areas)))
+        print("Min, max gate area {:f}, {:f}".format(areas[0], areas[-1]))
+        print("Standard deviation in gate area {:f} px^2".format(statistics.pstdev(areas)))
+
     t1 = datetime.datetime.now()
     cs = calculate_contacts(drawing)
     t2 = datetime.datetime.now()
@@ -478,9 +487,7 @@ if __name__ == "__main__":
     parser.add_argument("file", metavar="<file>", type=argparse.FileType('r'), nargs=1,
                         help="input Inkscape SVG file")
     parser.add_argument("--sch", action="store_true",
-                        help="whether to generate a KiCAD .sch file")
-    parser.add_argument("--qwires", action="store_true",
-                        help="whether to show wires to transistor electrodes in the schematic (gate wires are always shown)")
+                        help="whether to generate a KiCAD .sch file (outputs to polychip.sch, use eeschema to view!)")
     parser.add_argument("--nets", action="store_true",
                         help="whether to print the netlist")
     parser.add_argument("--qs", action="store_true",
@@ -504,7 +511,8 @@ if __name__ == "__main__":
         sum(g.num_qs() for g in gates.muxes)))
     for i in range(2, 25):
         gs = {g for g in gates.muxes if len(g.selecting_inputs) == i}
-        print("  {:d} {:d}-muxes".format(len(gs), i))
+        pgs = {g for g in gs if isinstance(g, PowerMultiplexer) }
+        print("  {:d} {:d}-muxes (includes {:d} power muxes)".format(len(gs), i, len(pgs)))
 
     for i in range(1, 10):
         nors = {nor for nor in gates.nors if len(nor.inputs) == i}
@@ -524,4 +532,4 @@ if __name__ == "__main__":
         print("  {:s} @ {:s}".format(q.name, str(q.centroid)))
 
     if args.sch:
-        write_sch_file("polychip.sch", drawing, gates, args.qwires)
+        write_sch_file("polychip.sch", drawing, gates)

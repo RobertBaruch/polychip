@@ -29,7 +29,7 @@ positional arguments:
 
 optional arguments:
   -h, --help  show this help message and exit
-  --sch       whether to generate a KiCAD .sch file
+  --sch       whether to generate a KiCAD .sch file (output to polychip.sch, use eeschema to view!)
   --nets      whether to print the netlist
   --qs        whether to print the transistor locations
 ```

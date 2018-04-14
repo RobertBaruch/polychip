@@ -158,27 +158,70 @@ class SchGate(SchObject):
             self.short_libname = "Q"
             self.rotation = 1
 
+        elif isinstance(gate, PowerMultiplexer):
+            n = len(gate.selecting_inputs)
+            assert n <= 3, "More than 3 input powermux isn't supported for schematic yet."
+            self.name_offset = (0, 0)
+            self.name_orientation = "V"
+            # + inputs come first, then - inputs.
+            if len(gate.high_inputs) == 1 and len(gate.low_inputs) == 1:
+                self.libname = "2PWRMUX"
+                self.output_offsets = [(150, 0)]
+                self.input_offsets = [(-150, -50), (-150, 50)]
+
+            elif len(gate.high_inputs) == 2 and len(gate.low_inputs) == 1:
+                self.libname = "2+1-MUX"
+                self.output_offsets = [(150, 0)]
+                self.input_offsets = [(-150, -50), (-150, 0), (-150, 50)]
+
+            elif len(gate.high_inputs) == 1 and len(gate.low_inputs) == 2:
+                self.libname = "1+2-MUX"
+                self.output_offsets = [(150, 0)]
+                self.input_offsets = [(-150, -50), (-150, 0), (-150, 50)]
+
+            self.short_libname = self.libname
+
         elif isinstance(gate, Multiplexer):
             n = len(gate.selected_inputs)
             assert n <= 3, "More than 3 input mux isn't supported for schematic output yet."
             self.libname = "{:d}MUX".format(n)
             self.short_libname = self.libname
             self.name_offset = (0, 25)
+            # Selected inputs (X) come first, then selecting inputs (S).
             if n == 2:
                 self.output_offsets = [(150, 0)]
                 self.input_offsets = [(-150, -50), (-150, 50), (-50, 150), (50, 150)]
+            elif n == 3:
+                self.output_offsets = [(200, 0)]
+                self.input_offsets = [(-200, -100), (-200, 0), (-200, 100), (-100, 200), (0, 200), (100, 200)]
 
         elif isinstance(gate, NorGate) or isinstance(gate, PowerNorGate):
             n = len(gate.inputs)
-            assert n <= 4, "More than 4 input NOR isn't supported for schematic output yet."
-            self.libname = ["NOT", "2NOT-AND", "3NOT-AND", "4NOT-AND"][n - 1]
-            self.short_libname = ["NOT", "2NOR", "3NOR", "4NOR"][n - 1]
+            assert n <= 6, "More than 6-input NOR isn't supported for schematic output yet."
+            if n == 1:
+                self.libname = "NOT"
+                self.short_libname = "NOT"
+            else:
+                self.libname = "{:d}NOT-AND".format(n)
+                self.short_libname = "{:d}NOR".format(n)
             if n == 1:
                 self.output_offsets = [(150, 0)]
                 self.input_offsets = [(-150, 0)]
             elif n == 2:
                 self.output_offsets = [(200, 0)]
                 self.input_offsets = [(-150, -50), (-150, 50)]
+            elif n == 3:
+                self.output_offsets = [(200, 0)]
+                self.input_offsets = [(-150, -50), (-150, 0), (-150, 50)]
+            elif n == 4:
+                self.output_offsets = [(200, 0)]
+                self.input_offsets = [(-150, -150), (-150, -50), (-150, 50), (-150, 150)]
+            elif n == 5:
+                self.output_offsets = [(200, 0)]
+                self.input_offsets = [(-150, -200), (-150, -100), (-150, 0), (-150, 100), (-150, 200)]
+            elif n == 6:
+                self.output_offsets = [(200, 0)]
+                self.input_offsets = [(-150, -250), (-150, -150), (-150, -50), (-150, 50), (-150, 150), (-150, 250)]
 
         elif isinstance(gate, TristateInverter):
             self.libname = "INV_TRISTATE_NEG_OE_SMALL"
@@ -246,7 +289,7 @@ def write_wire(f, output_loc, output_offset, input_loc, input_offset):
     print("    {:d} {:d} {:d} {:d}".format(x1, y1, x2, y2), file=f)
 
 
-def write_sch_file(filename, drawing, gates, qwires=False):
+def write_sch_file(filename, drawing, gates):
     with open(filename, 'wt', encoding='utf-8') as f:
         print("EESchema Schematic File Version 4", file=f)
         print("EELAYER 26 0", file=f)
@@ -298,7 +341,7 @@ def write_sch_file(filename, drawing, gates, qwires=False):
                     sch_objects[q.name] = SchTransistor(q)
 
         for g in gates.nors:
-            if len(g.inputs) <= 4:
+            if len(g.inputs) <= 6:
                 sch_objects[g.name] = SchGate(g)
             else:
                 print("[{:d}-NOR not supported for schematic output; just placing its transistors.".format(
