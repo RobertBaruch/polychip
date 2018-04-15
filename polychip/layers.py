@@ -1,6 +1,7 @@
 import functools
 import shapely
 import shapely.geometry
+import shapely.wkt
 
 from enum import Enum, unique
 from svg_parse import *
@@ -31,8 +32,8 @@ class Layer(Enum):
     DIFF = "Diff"
     CONTACTS = "Contacts"
     QNAMES = "QNames"
-    SNAMES ="SNames"
-    PNAMES ="PNames"
+    SNAMES = "SNames"
+    PNAMES = "PNames"
 
     def path(self):
         return "./svg:g[@inkscape:groupmode='layer'][@inkscape:label='" + self.value + "']"
@@ -52,6 +53,20 @@ class Label(object):
         self.extents = extents
         self.center = extents.centroid
 
+    def to_dict(self):
+        """Converts to a dictionary, for JSON encoding."""
+        return {
+            "__POLYCHIP_OBJECT__": "Label",
+            "text": self.text,
+            "extents": self.extents.wkt,
+        }
+
+    @staticmethod
+    def from_dict(d):
+        """Converts a dictionary to a Transistor, for JSON decoding."""
+        assert d["__POLYCHIP_OBJECT__"] == "Label", "Label.from_dict wasn't given its expected dict: " + str(d)
+        return Label(d["text"], shapely.wkt.loads(d["extents"]))
+        
 
 class InkscapeFile:
     """Represents all the paths and names found in an Inkscape file.
@@ -82,10 +97,10 @@ class InkscapeFile:
         self.poly_array = []
         self.metal_array = []
         self.diff_array = []
-        self.multicontact = None
-        self.multipoly = None
-        self.multidiff = None
-        self.multimetal = None
+        self.multicontact = shapely.geometry.MultiPolygon()
+        self.multipoly = shapely.geometry.MultiPolygon()
+        self.multidiff = shapely.geometry.MultiPolygon()
+        self.multimetal = shapely.geometry.MultiPolygon()
 
         self.to_screen_coords_transform_ = self.extract_screen_transform(root)
 

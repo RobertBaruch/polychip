@@ -161,7 +161,6 @@ class SchGate(SchObject):
         elif isinstance(gate, PowerMultiplexer):
             n = len(gate.selecting_inputs)
             assert n <= 3, "More than 3 input powermux isn't supported for schematic yet."
-            self.name_offset = (0, 0)
             self.name_orientation = "V"
             # + inputs come first, then - inputs.
             if len(gate.high_inputs) == 1 and len(gate.low_inputs) == 1:
@@ -263,15 +262,44 @@ class SchGate(SchObject):
             elif n == 7:
                 self.input_offsets = [(-120, -180), (-120, -120), (-120, -60), (-120, 0), (-120, 60), (-120, 120), (-120, 180)]
 
+        elif isinstance(gate, SignalBooster):
+            self.libname = "BUFF"
+            self.short_libname = self.libname
+            self.output_offsets = [(150, 0)]
+            self.input_offsets = [(-150, 0)]
+
+        elif isinstance(gate, PinInput):
+            self.output_offsets = [(150, 0)]
+            self.input_offsets = [(-150, 0)]
+            if gate.inv2 is None:
+                t = "INV"
+            else:
+                t = "BUFF"
+            self.short_libname = "PIN_" + t
+            if gate.pullup is not None and gate.pulldown is not None:
+                self.libname = t + "_PULLUP_PULLDOWN"
+            elif gate.pullup is not None:
+                self.libname = t + "_PULLUP"
+            elif gate.pulldown is not None:
+                self.libname = t + "_PULLDOWN"
+            else:
+                raise AssertionError("Unexpected type of PinInput, with no pullup or pulldown.")
+
+        elif isinstance(gate, PinIO):
+            self.output_offsets = [(-240, 0), (70, -190)]
+            self.input_offsets = [(220, -40), (220, 70)]
+            if gate.pin_input.inv2 is not None:
+                self.libname = "PIN_IO"
+            else:
+                self.libname = "PIN_IO_INV"
+            self.short_libname = self.libname
+
         else:
             raise AssertionError("Unsupported gate for schematic output: " + str(type(gate)))
 
 
-def sch_size_transform(file):
-    bounding_box = shapely.ops.cascaded_union([shapely.geometry.box(*m.bounds) for m in 
-        [file.multicontact, file.multipoly, file.multidiff, file.multimetal]]).bounds
+def sch_size_transform(bounding_box):
     minx, miny, maxx, maxy = bounding_box
-    print(str(bounding_box))
     w = maxx - minx
     h = maxy - miny
     d = max(w, h)
@@ -289,7 +317,7 @@ def write_wire(f, output_loc, output_offset, input_loc, input_offset):
     print("    {:d} {:d} {:d} {:d}".format(x1, y1, x2, y2), file=f)
 
 
-def write_sch_file(filename, drawing, gates):
+def write_sch_file(filename, drawing_bounding_box, gates):
     with open(filename, 'wt', encoding='utf-8') as f:
         print("EESchema Schematic File Version 4", file=f)
         print("EELAYER 26 0", file=f)
@@ -307,7 +335,7 @@ def write_sch_file(filename, drawing, gates):
         print("Comment4 \"\"", file=f)
         print("$EndDescr", file=f)
 
-        SchObject.inkscape_to_sch_transform = sch_size_transform(drawing)
+        SchObject.inkscape_to_sch_transform = sch_size_transform(drawing_bounding_box)
         sch_objects = {}
 
         for q in gates.qs:
@@ -365,7 +393,16 @@ def write_sch_file(filename, drawing, gates):
                 for q in g.qs:
                     sch_objects[q.name] = SchTransistor(q)
 
-        for label in drawing.pnames:
+        for g in gates.signal_boosters:
+            sch_objects[g.name] = SchGate(g)
+
+        for g in gates.pin_inputs:
+            sch_objects[g.name] = SchGate(g)
+
+        for g in gates.pin_ios:
+            sch_objects[g.name] = SchGate(g)
+
+        for label in gates.pnames:
             sch_objects["__LABEL__" + label.text] = SchPin(label, 0)
 
         for sch_object in sch_objects.values():
@@ -378,11 +415,6 @@ def write_sch_file(filename, drawing, gates):
                 sch_objects_by_input_net[input].add(o)
             for output in o.output_nets:
                 sch_objects_by_output_net[output].add(o)
-
-        # for net, os in sch_objects_by_output_net.items():
-        #     print("output net {:s} -> {:d}".format(net, len(os)))
-        # for net, os in sch_objects_by_input_net.items():
-        #     print("input net {:s} -> {:d}".format(net, len(os)))
 
         for o in sch_objects.values():
             for i, output_offset in enumerate(o.output_offsets):

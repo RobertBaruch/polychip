@@ -1,3 +1,7 @@
+# v0.8RC1 (15 Apr 2018)
+* Adds signal booster, pin inputs and pin i/o gates and schematic symbols. NOT TESTED.
+* Adds --output and --input options, so that you can output the results of an SVG analysis as JSON, and input the results on later runs to save time. This is useful when you're working on the code for recognizing more gates, and don't need to re-analyze the drawing because it hasn't changed.
+
 # v0.7 (14 Apr 2018)
 * Adds 5-NOR and 6-NOR schematic symbols.
 * Adds a powermux schematic symbol.

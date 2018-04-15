@@ -1,6 +1,7 @@
 import argparse
 import collections
 import datetime
+import json
 import re
 import networkx as nx
 import shapely.ops
@@ -8,9 +9,11 @@ import shapely.strtree
 import statistics
 import functools
 import pprint
+import sys
 from enum import Enum, unique
 from svg_parse import *
 from layers import InkscapeFile
+from layers import Label
 from layers import coerce_multipoly
 from gates import Transistor
 from gates import Gates
@@ -57,6 +60,19 @@ class Type(Enum):
 
     def __repr__(self):
         return "Type." + str(self.name)
+
+    def to_dict(self):
+        """Convert to dictionary, for JSON output."""
+        return {
+            "__POLYCHIP_OBJECT__": "Type",
+            "n": self.value,
+        }
+
+    @staticmethod
+    def from_dict(dict):
+        """Returns the Type corresponding to the dict."""
+        assert dict["__POLYCHIP_OBJECT__"] == "Type", "Type.from_dict wasn't given its expected dict: " + str(dict)
+        return Type(dict["n"])
 
 
 def calculate_contacts(drawing):
@@ -481,21 +497,127 @@ def nmos_nand_iter(nets, qs):
             print(path)
 
 
+class Net(object):
+    """Representation of a net as it comes from file_to_netlist, except without using sets so that
+    it is dumpable by JSONEncoder.
+
+    Args:
+        netname (str): The name of the net, or None if unnamed.
+        net ({net_node}):
+            net_node ((type, qname)):
+                type (Type): the transistor connection (E0, E1, or GATE).
+                qname (str): the name of the transistor
+    """
+    def __init__(self, netname, net):
+        self.netname = netname
+        self.net = list(net)
+
+    def to_dict(self):
+        return {
+            "__POLYCHIP_OBJECT__": "Net",
+            "netname": self.netname,
+            "net": self.net,
+        }
+
+    @staticmethod
+    def from_dict(d):
+        """Returns not a Net, but (netname, net) as was given originally in the constructor."""
+        assert d["__POLYCHIP_OBJECT__"] == "Net", "Net.from_dict wasn't given its expected dict: " + str(d)
+        netname = d["netname"]
+        net = {(e[0], e[1]) for e in d["net"]}
+        return (netname, net)
+
+
+class PolychipJsonEncoder(json.JSONEncoder):
+    def default(self, o):
+        if type(o) == set:
+            print("FATAL: attempted to encode set object: " + str(o))
+        if isinstance(o, Transistor) or isinstance(o, Net) or isinstance(o, Type) or isinstance(o, Label):
+            return o.to_dict()
+        return json.JSONEncoder.default(self, o)
+
+
+def polychip_decode_json(d):
+    """Decodes a decoded json disctionary to polychip objects."""
+    if "__POLYCHIP_OBJECT__" not in d:
+        return d
+    t = d["__POLYCHIP_OBJECT__"]
+    if t == "Net":
+        return Net.from_dict(d)
+    elif t == "Transistor":
+        return Transistor.from_dict(d)
+    elif t == "Type":
+        return Type.from_dict(d)
+    elif t == "Label":
+        return Label.from_dict(d)
+    else:
+        raise AssertionError("Unsupported polychip object for JSON decode: " + t)
+
+
 if __name__ == "__main__":
+    version = "0.8RC1"
+    print("Polychip v" + version)
+
     parser = argparse.ArgumentParser(description="Polychip, a program to help recognize transistors and "
         "gates in an Inkscape file traced from an NMOS integrated circuit.")
-    parser.add_argument("file", metavar="<file>", type=argparse.FileType('r'), nargs=1,
+    parser.add_argument("file", metavar="<svgfile>", type=argparse.FileType('r'), nargs="?", default=None,
                         help="input Inkscape SVG file")
     parser.add_argument("--sch", action="store_true",
-                        help="whether to generate a KiCAD .sch file (outputs to polychip.sch, use eeschema to view!)")
+                        help="whether to generate a KiCAD .sch file. Outputs to polychip.sch, use eeschema to view!")
     parser.add_argument("--nets", action="store_true",
                         help="whether to print the netlist")
     parser.add_argument("--qs", action="store_true",
                         help="whether to print the transistor locations")
+    parser.add_argument("--output", metavar="<outfile>", type=str, nargs=1, action="store",
+                        help="a JSON file to output the net, q, and drawing data to. Use with --input to skip a lot of work!")
+    parser.add_argument("--input", metavar="<infile>", type=str, nargs=1, action="store",
+                        help="a JSON file to input the net, q, and drawing data from. Use with --output to skip a lot of work!")
     args = parser.parse_args()
 
-    nets, qs, drawing = file_to_netlist(args.file[0], args.nets, args.qs)
-    gates = Gates(nets, qs)
+    if args.input is None:
+        if args.file is None:
+            parser.print_help()
+            sys.exit(1)
+
+        # nets ({netname: net}):
+        #     netname (str): The name of the net, or None if unnamed.
+        #     net ({net_node}):
+        #         net_node ((type, qname)):
+        #             type (Type): the transistor connection (E0, E1, or GATE).
+        #             qname (str): the name of the transistor
+        # qs ([Transistor]): list of transistors found.
+        # drawing (InkscapeFile): the InkscapeFile representation.
+        nets, qs, drawing = file_to_netlist(args.file, args.nets, args.qs)
+
+        # drawing_bounding_box (float, float, float, float): Bounding box (minx, miny, maxx, maxy) for the InkscapeFile.
+        layer_bounds = [m.bounds for m in [drawing.multicontact, drawing.multipoly, drawing.multidiff, drawing.multimetal]
+            if m.bounds != ()]
+        drawing_bounding_box = shapely.ops.cascaded_union(
+            [shapely.geometry.box(*bounds) for bounds in layer_bounds]).bounds
+
+        # pnames ([Label]): list of pin names.
+        pnames = drawing.pnames
+
+        if args.output is not None:
+            # We dump everything that any stage after this requires.
+            with open(args.output[0], 'wt', encoding='utf-8') as f:
+                json.dump({
+                    "nets": [Net(netname, net) for netname, net in nets.items()],
+                    "qs": qs,
+                    "pnames": pnames,
+                    "drawing_bounding_box": drawing_bounding_box,  # note: this tuple becomes a list.
+                }, f, cls=PolychipJsonEncoder)
+
+    if args.input is not None:
+        with open(args.input[0], 'rt', encoding='utf-8') as f:
+            d = json.load(f, object_hook=polychip_decode_json)
+            nets = {netname: net for (netname, net) in d["nets"]}
+            qs = d["qs"]
+            pnames = d["pnames"]
+            box = d["drawing_bounding_box"]
+            drawing_bounding_box = (box[0], box[1], box[2], box[3])
+
+    gates = Gates(nets, qs, pnames)
 
     print("{:d} total transistors".format(len(gates.qs)))
 
@@ -526,10 +648,17 @@ if __name__ == "__main__":
     print("Found {:d} mux D-latches (total {:d} qs): {:s}".format(len(gates.mux_d_latches),
         sum(g.num_qs() for g in gates.mux_d_latches),
         str(list(g.output_power_q.name for g in gates.mux_d_latches))))
+    print("Found {:d} signal boosters (total {:d} qs)".format(len(gates.signal_boosters),
+        sum(g.num_qs() for g in gates.signal_boosters)))
+    print("Found {:d} pin inputs (total {:d} qs)".format(len(gates.pin_inputs),
+        sum(g.num_qs() for g in gates.pin_inputs)))
+    print("Found {:d} pin I/Os (total {:d} qs)".format(len(gates.pin_ios),
+        sum(g.num_qs() for g in gates.pin_ios)))
+
 
     print("{:d} unallocated transistors:".format(len(gates.qs)))
     for q in gates.qs:
         print("  {:s} @ {:s}".format(q.name, str(q.centroid)))
 
     if args.sch:
-        write_sch_file("polychip.sch", drawing, gates)
+        write_sch_file("polychip.sch", drawing_bounding_box, gates)

@@ -3,6 +3,7 @@ import re
 import networkx as nx
 import functools
 import pprint
+import shapely.wkt
 
 def is_power_net(name):
     return name.startswith('VCC') or name.startswith('VDD')
@@ -18,14 +19,15 @@ class Transistor(object):
 
     Args:
     Attributes:
-        gate_shape (shapely.geometry.Polygon): The polygon outlining the transistor's gate. 
+        name (str): The name of the transistor, if found on the QNames layer, otherwise None.
         gate (int): The index into the InkscapeFile's poly_array that connects to this transistor's gate.
+        gate_net (str): The name of the net the gate is connected to.
+        gate_shape (shapely.geometry.Polygon): The polygon outlining the transistor's gate. 
+        centroid (shapely.geometry.Point): The gate shape's centroid.
         electrode0 (int): The index into the InkscapeFile's diff_array that connects to one
             side of this transistor.
         electrode1 (int): The index into the InkscapeFile's diff_array that connects to the other
             side of this transistor.
-        name (str): The name of the transistor, if found on the QNames layer, otherwise None.
-        gate_net (str): The name of the net the gate is connected to.
         electrode0_net (str): The name of the net electrode 0 is connected to.
         electrode1_net (str): The name of the net electrode 1 is connected to.
     """
@@ -35,7 +37,8 @@ class Transistor(object):
         self.electrode0 = electrode0
         self.electrode1 = electrode1
         self.name = name
-        self.centroid = self.gate_shape.centroid
+        if self.gate_shape is not None:
+            self.centroid = self.gate_shape.centroid
         self.gate_net = None
         self.electrode0_net = None
         self.electrode1_net = None
@@ -46,17 +49,36 @@ class Transistor(object):
     def __repr__(self):
         return "Transistor({:s} @ {:f}, {:f})".format(self.name, self.centroid.x, self.centroid.y)
 
-    def as_dict(self):
+    def to_dict(self):
+        """Converts to a dictionary, for JSON encoding."""
         return {
-            'name': self.name,
-            'gate': {
-                'x': self.centroid.x,
-                'y': self.centroid.y,
-                'net': self.gate_net
-            },
-            'e0_net': self.electrode0_net,
-            'e1_net': self.electrode1_net
+            "__POLYCHIP_OBJECT__": "Transistor",
+            "centroid": self.centroid.wkt,
+            "electrode0": self.electrode0,
+            "electrode1": self.electrode1,
+            "electrode0_net": self.electrode0_net,
+            "electrode1_net": self.electrode1_net,
+            "gate_shape": self.gate_shape.wkt,
+            "gate": self.gate,
+            "gate_net": self.gate_net,
+            "name": self.name,
         }
+
+    @staticmethod
+    def from_dict(d):
+        """Converts a dictionary to a Transistor, for JSON decoding."""
+        assert d["__POLYCHIP_OBJECT__"] == "Transistor", "Transistor.from_dict wasn't given its expected dict: " + str(d)
+        t = Transistor(None, None, None, None, None)
+        t.centroid = shapely.wkt.loads(d["centroid"])
+        t.electrode0 = d["electrode0"]
+        t.electrode1 = d["electrode1"]
+        t.electrode0_net = d["electrode0_net"]
+        t.electrode1_net = d["electrode1_net"]
+        t.gate_shape = shapely.wkt.loads(d["gate_shape"])
+        t.gate = d["gate"]
+        t.gate_net = d["gate_net"]
+        t.name = d["name"]
+        return t
 
     def nongrounded_electrode_net(self):
         """Returns the first electrode net not ground, or None if both are ground."""
@@ -119,7 +141,8 @@ class Gate(object):
         output_power_q (Transistor): The transistor giving the output power.
         outputs ([str]): The name of the output nets. Generally the order is significant.
         inputs ([str]): The list of names of the input nets. Generally the order is significant.
-        qs ([Transistor]): The list of transistors making up the gate,including any subgates
+        qs ([Transistor]): The list of transistors making up the gate, NOT including
+                           those of any subgates.
         subgates ([Gate]): The list of gates that make up this gate.
     """
     def __init__(self, output_power_q, outputs, inputs, qs, subgates=[]):
@@ -320,7 +343,7 @@ class Nand(Lut):
 class TristateInverter(Gate):
     def __init__(self, inverter, high_nor, low_nor, mux, noe):
         super().__init__(mux.output_power_q, mux.outputs, [inverter.input(), noe],
-            inverter.qs + high_nor.qs + low_nor.qs + mux.qs)
+            [], [inverter, high_nor, low_nor, mux])
         self.inverter = inverter
         self.high_nor = high_nor
         self.low_nor = low_nor
@@ -343,7 +366,7 @@ class TristateInverter(Gate):
 class TristateBuffer(Gate):
     def __init__(self, inverter, high_nor, low_nor, mux, noe):
         super().__init__(mux.output_power_q, mux.outputs, [inverter.input(), noe],
-            inverter.qs + high_nor.qs + low_nor.qs + mux.qs)
+            [], [inverter, high_nor, low_nor, mux])
         self.inverter = inverter
         self.high_nor = high_nor
         self.low_nor = low_nor
@@ -357,10 +380,11 @@ class TristateBuffer(Gate):
         d = super().as_dict()
         d.update({
             'type': 'Tristate Buffer',
-            '/oe': self.oe,
+            '/oe': self.noe,
             'in': only(self.inverter.inputs),
         })
         return d
+
 
 class MuxDLatch(Gate):
     """A multiplexer-based D-latch.
@@ -385,24 +409,9 @@ class MuxDLatch(Gate):
     used in each lut as separate luts. Then they could be represented in the
     schematic.
     """
-    # def __init__(self, mux, q_nor, nq_nor):
-    #     super().__init__(q_nor.output_power_q, [q_nor.output(), nq_nor.output()], [],
-    #         mux.qs | q_nor.qs | nq_nor.qs)
-    #     self.mux = mux
-    #     self.q_nor = q_nor
-    #     self.nq_nor = nq_nor
-    #     self.q_output = q_nor.output()
-    #     self.nq_output = nq_nor.output()
-    #     i = next(i for i, input in enumerate(mux.selected_inputs) if input == q_nor.output())
-    #     self.nc_input = mux.selecting_inputs[i]
-    #     self.c_input = mux.selecting_inputs[1 - i]
-    #     self.d_input = mux.selected_inputs[1 - i]
-    #     self.set_inputs = [input for input in nq_nor.inputs if input != mux.output()]
-    #     self.clr_inputs = [input for input in q_nor.inputs if input != nq_nor.output()]
-    #     self.inputs = [self.d_input, self.c_input, self.nc_input]
     def __init__(self, mux, q_lut, nq_lut):
         super().__init__(q_lut.output_power_q, [q_lut.output(), nq_lut.output()], [],
-            mux.qs + q_lut.qs + nq_lut.qs)
+            [], [mux, q_lut, nq_lut])
         self.mux = mux
         self.q_lut = q_lut
         self.nq_lut = nq_lut
@@ -416,6 +425,48 @@ class MuxDLatch(Gate):
         self.clr_inputs = [input for input in q_lut.inputs if input != nq_lut.output()]
         self.inputs = [self.d_input, self.c_input, self.nc_input]
 
+
+class SignalBooster(Gate):
+    """An inverter followed by a 2-input power mux."""
+    def __init__(self, mux, inv):
+        super().__init__(only([q for q in mux.qs if q.is_powering()]), mux.outputs, inv.inputs,
+            [], [mux, inv])
+        self.mux = mux
+        self.inv = inv
+
+
+class PinInput(Gate):
+    """An inverter followed optionally by one inverter and no other gate.
+
+    The first inverter's input must have a pullup, pulldown, or both.
+    """
+    def __init__(self, inv1, inv2, pullup, pulldown):
+        if inv2 is not None:
+            super().__init__(inv2.output_power_q, inv2.outputs, inv1.inputs,
+                [], [g for g in [inv1, inv2, pullup, pulldown] if g is not None])
+        else:
+            super().__init__(inv1.output_power_q, inv1.outputs, inv1.inputs,
+                [], [g for g in [inv1, pullup, pulldown] if g is not None])
+        self.inv1 = inv1
+        self.inv2 = inv2
+        self.pullup = pullup
+        self.pulldown = pulldown
+
+
+class PinIO(Gate):
+    """A pin feeding a PinInput and fed by a tristate buffer.
+
+    Output ordering is pin_input output, tristate_buffer output (i.e. the pin).
+    Input ordering is same as in TristateBuffer.
+    """
+    def __init__(self, pin_input, tristate_buffer):
+        super().__init__(pin_input.output_power_q, [pin_input.output(), tristate_buffer.output()],
+            tristate_buffer.inputs, [], [pin_input, tristate_buffer])
+        self.pin_input = pin_input
+        self.tristate_buffer = tristate_buffer
+        self.pin = pin_input.input()
+
+
 def only(items):
     """Returns the only element in a set or list of one element."""
     assert len(items) == 1, "Oops, length of iterable in only() was {:d}.".format(len(items))
@@ -423,7 +474,7 @@ def only(items):
 
 
 def set_dictionary(generator):
-    """Constructs a dictionary of key:set."""
+    """Constructs a dictionary of key:set(value) from a generator of (key, value) tuples."""
     d = collections.defaultdict(set)
     for k, v in generator:
         d[k].add(v)
@@ -452,10 +503,12 @@ class Gates(object):
                     type (Type): the transistor connection (E0, E1, or GATE).
                     qname (str): the name of the transistor
         qs ([Transistor]): A list of all the transistors.
+        pnames ([Label]): A list of all the pin labels.
     """
-    def __init__(self, nets, qs):
+    def __init__(self, nets, qs, pnames):
         self.nets = nets
         self.qs = set(qs)
+        self.pnames = pnames
         self.qs_by_name = {q.name: q for q in qs}
         self.qs_by_electrode_net = collections.defaultdict(set)
         self.qs_by_gate_net = collections.defaultdict(set)
@@ -486,6 +539,21 @@ class Gates(object):
         self.tristate_inverters = set()
         self.tristate_buffers = set()
         self.mux_d_latches = set()
+        self.signal_boosters = set()
+        self.pin_inputs = set()
+        self.pin_ios = set()
+
+    def all_gates(self):
+        all = set()
+        for gs in [self.pulldowns, self.pullups, self.pass_qs, self.luts, self.muxes, self.nors,
+                self.nands, self.tristate_inverters, self.tristate_buffers, self.mux_d_latches,
+                self.signal_boosters, self.pin_inputs, self.pin_ios]:
+            all.update(gs)
+        return all
+
+    def gates_by_input(self):
+        """Returns a set dictionary of input to gate."""
+        return set_dictionary(((i, g) for g in self.all_gates() for i in g.inputs))
 
     def find_all_the_things(self):
         lut_strategy = 2
@@ -505,6 +573,9 @@ class Gates(object):
         self.find_tristate_buffers()
         self.find_mux_d_latches()
         self.find_pullups()
+        self.find_signal_boosters()
+        self.find_pin_inputs()
+        self.find_pin_ios()
 
     def remove_q(self, q):
         # if q in self.grounding_qs:
@@ -554,6 +625,9 @@ class Gates(object):
 
     def unpowered_net_iter(self, net_iter):
         return (net for net in net_iter if net not in self.logic_nets)
+
+    def invs(self):
+        return [nor for nor in self.nors if len(nor.inputs) == 1]
 
     def find_power_qs(self):
         powered_parallel_qs = []
@@ -618,6 +692,10 @@ class Gates(object):
                     G.add_edge(q.electrode0_net, q.electrode1_net, q=q)
             if q.gate_net not in self.pulled_up_nets:
                 G.add_edge(q.gate_net, "__GATE__", q=q)
+
+        # No gates anywhere? Then just return.
+        if "__GATE__" not in G:
+            return
 
         # find all simple paths from a pulled-up net to a gate.
         pass_paths = []
@@ -684,8 +762,9 @@ class Gates(object):
             self.remove_q(g.q())
 
     def find_luts(self):
-        #candidate_nets = self.pulled_up_nets
-
+        # Create a graph from the transistors where every ground node is separate, but any
+        # transistor gate that is not part of a pullup resistor is a single node called __GATE__.
+        # We also exclude pullups from the transistors in the graph.
         G = nx.Graph()
         tmp = 0
         for q in self.qs - self.nmos_resistor_qs:
@@ -800,7 +879,7 @@ class Gates(object):
 
         # Get just those components that make a tristate inverter.
         nor2s = {n for n in self.nors if len(n.inputs) == 2}
-        invs = {n for n in self.nors if len(n.inputs) == 1}
+        invs = self.invs()
         muxes = {g for g in self.muxes if type(g) == PowerMultiplexer and len(g.selected_inputs) == 2}
 
         # Map the inverters and nors
@@ -869,7 +948,7 @@ class Gates(object):
 
         # Get just those components that make a tristate buffer.
         nor2s = {n for n in self.nors if len(n.inputs) == 2}
-        invs = {n for n in self.nors if len(n.inputs) == 1}
+        invs = self.invs()
         muxes = {g for g in self.muxes if type(g) == PowerMultiplexer and len(g.selected_inputs) == 2}
 
         # Map the inverters and nors
@@ -975,3 +1054,85 @@ class Gates(object):
                 self.luts.remove(g.nq_lut)
             self.muxes.remove(g.mux)
 
+
+    def find_signal_boosters(self):
+        """Finds SignalBooster instances."""
+        # Get only 2-input PowerMultiplexers
+        muxes = [mux for mux in self.muxes if type(mux) == PowerMultiplexer and len(mux.selecting_inputs) == 2]
+
+        muxes_by_pos_input = {only(mux.high_inputs): mux for mux in muxes}
+
+        # Find inverters whose output connects to the + selecting input
+        invs = [inv for inv in self.invs() if inv.input() in muxes_by_pos_input]
+
+        gates_by_input = self.gates_by_input()
+
+        # Keep only inverters where the output goes only to the mux
+        invs = [inv for inv in invs if len(gates_by_input[inv.output()]) == 1]
+
+        # For each inverter, if its output goes to the - selecting input, we have a signal booster.
+        for inv in invs:
+            mux = muxes_by_pos_input[inv.input()]
+            if inv.output() == only(mux.low_inputs):
+                self.signal_boosters.add(SignalBooster(mux, inv))
+
+        for g in self.signal_boosters:
+            self.nors.remove(g.inv)
+            self.muxes.remove(g.mux)
+
+    def find_pin_inputs(self):
+        """Finds PinInput instances."""
+        # Get only inverters whose input connects to a pin.
+        pnames = {label.text for label in self.pnames}
+        invs = [inv for inv in self.invs() if inv.input() in pnames]
+
+        # Eliminate those first inverters without pullups or pulldowns.
+        pullups_by_net = {p.input(): p for p in self.pullups}
+        pulldowns_by_net = {p.input(): p for p in self.pulldowns}
+        invs = [inv for inv in invs if inv.input() in pullups_by_net or inv.input() in pulldowns_by_net]
+
+        # At this point we may have a pin inverter or a pin buffer. There's one last check to do.
+        invs_by_input = {inv.input(): inv for inv in self.invs()}
+        gates_by_input = self.gates_by_input()
+
+        for inv in invs:
+            pullup = pullups_by_net.get(inv.input())
+            pulldown = pulldowns_by_net.get(inv.input())
+
+            # Ensure that the pin feeds only the inverter and the optional pullup and pulldown,
+            # i.e. it feeds no "foreign" gates.
+            fed_gates = set(gates_by_input[inv.input()]) - {x for x in [inv, pullup, pulldown] if x is not None}
+            if len(fed_gates) > 0:
+                continue
+
+            # If the inverter feeds another inverter and nothing else, then it's a pin buffer.
+            # Otherwise it's a pin inverter.
+            inv2 = None
+            if inv.output() in invs_by_input and len(gates_by_input[inv.output()]) == 1:
+                inv2 = invs_by_input[inv.output()]
+            g = PinInput(inv, inv2, pullup, pulldown)
+            self.pin_inputs.add(g)
+
+        for g in self.pin_inputs:
+            if g.pullup is not None:
+                self.pullups.remove(g.pullup)
+            if g.pulldown is not None:
+                self.pulldowns.remove(g.pulldown)
+            self.nors.remove(g.inv1)
+            if g.inv2 is not None:
+                self.nors.remove(g.inv2)
+
+    def find_pin_ios(self):
+        """Finds PinIO instances.
+
+        If a pin feeds a PinInput and is fed by a TristateBuffer, we can coalesce them to a PinIO.
+        """
+        tristate_buffers_by_output = {buff.output(): buff for buff in self.tristate_buffers}
+        for pin_input in self.pin_inputs:
+            buff = tristate_buffers_by_output.get(pin_input.input())
+            if buff is not None:
+                self.pin_ios.add(PinIO(pin_input, buff))
+
+        for g in self.pin_ios:
+            self.pin_inputs.remove(g.pin_input)
+            self.tristate_buffers.remove(g.tristate_buffer)

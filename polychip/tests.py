@@ -201,11 +201,15 @@ class PolychipTestCase(unittest.TestCase):
         filename = "test/" + key + ".svg"
         self.assertRaises(AssertionError, file_to_netlist, filename)
 
+    def get_gates(self, filename):
+        netlist, qs, drawing = file_to_netlist(filename)
+        gates = Gates(netlist, qs, drawing.pnames)
+        gates.find_all_the_things()
+        return gates
+
     def test_find_parallel_qs(self):
         filename = "test/polychip_test_parallel_qs.svg"
-        netlist, qs, _ = file_to_netlist(filename)
-        gates = Gates(netlist, qs)
-        gates.find_all_the_things()
+        gates = self.get_gates(filename)
 
         self.assertEqual(len(gates.luts), 0)
         self.assertEqual(len(gates.muxes), 0)
@@ -217,9 +221,7 @@ class PolychipTestCase(unittest.TestCase):
 
     def test_find_lut(self):
         filename = "test/polychip_test_lut.svg"
-        netlist, qs, _ = file_to_netlist(filename)
-        gates = Gates(netlist, qs)
-        gates.find_all_the_things()
+        gates = self.get_gates(filename)
 
         self.assertEqual(len(gates.luts), 1)
         self.assertEqual(len(gates.muxes), 0)
@@ -237,9 +239,7 @@ class PolychipTestCase(unittest.TestCase):
 
     def test_find_inverter(self):
         filename = "test/polychip_test_inverter.svg"
-        netlist, qs, _ = file_to_netlist(filename)
-        gates = Gates(netlist, qs)
-        gates.find_all_the_things()
+        gates = self.get_gates(filename)
 
         self.assertEqual(len(gates.luts), 0)
         self.assertEqual(len(gates.muxes), 0)
@@ -252,9 +252,7 @@ class PolychipTestCase(unittest.TestCase):
 
     def test_find_2nor(self):
         filename = "test/polychip_test_2nor.svg"
-        netlist, qs, _ = file_to_netlist(filename)
-        gates = Gates(netlist, qs)
-        gates.find_all_the_things()
+        gates = self.get_gates(filename)
 
         self.assertEqual(len(gates.luts), 0)
         self.assertEqual(len(gates.muxes), 0)
@@ -267,9 +265,7 @@ class PolychipTestCase(unittest.TestCase):
 
     def test_find_3nand(self):
         filename = "test/polychip_test_nand.svg"
-        netlist, qs, _ = file_to_netlist(filename)
-        gates = Gates(netlist, qs)
-        gates.find_all_the_things()
+        gates = self.get_gates(filename)
 
         self.assertEqual(len(gates.luts), 0)
         self.assertEqual(len(gates.muxes), 0)
@@ -283,9 +279,7 @@ class PolychipTestCase(unittest.TestCase):
 
     def test_find_pass_q(self):
         filename = "test/polychip_test_pass_q.svg"
-        netlist, qs, _ = file_to_netlist(filename)
-        gates = Gates(netlist, qs)
-        gates.find_all_the_things()
+        gates = self.get_gates(filename)
 
         self.assertEqual(len(gates.pass_qs), 1)
         self.assertEqual(len(gates.luts), 0)
@@ -298,9 +292,7 @@ class PolychipTestCase(unittest.TestCase):
 
     def test_find_2mux(self):
         filename = "test/polychip_test_2mux.svg"
-        netlist, qs, _ = file_to_netlist(filename)
-        gates = Gates(netlist, qs)
-        gates.find_all_the_things()
+        gates = self.get_gates(filename)
 
         self.assertEqual(len(gates.pass_qs), 1)
         self.assertEqual(len(gates.luts), 0)
@@ -316,9 +308,7 @@ class PolychipTestCase(unittest.TestCase):
 
     def test_find_power_mux(self):
         filename = "test/polychip_test_power_mux.svg"
-        netlist, qs, _ = file_to_netlist(filename)
-        gates = Gates(netlist, qs)
-        gates.find_all_the_things()
+        gates = self.get_gates(filename)
 
         self.assertEqual(len(gates.pass_qs), 1)
         self.assertEqual(len(gates.luts), 0)
@@ -335,9 +325,7 @@ class PolychipTestCase(unittest.TestCase):
 
     def test_find_power_inverter(self):
         filename = "test/polychip_test_power_inverter.svg"
-        netlist, qs, _ = file_to_netlist(filename)
-        gates = Gates(netlist, qs)
-        gates.find_all_the_things()
+        gates = self.get_gates(filename)
 
         self.assertEqual(len(gates.pass_qs), 1)
         self.assertEqual(len(gates.luts), 0)
@@ -352,9 +340,7 @@ class PolychipTestCase(unittest.TestCase):
 
     def test_find_power_2nor(self):
         filename = "test/polychip_test_power_2nor.svg"
-        netlist, qs, _ = file_to_netlist(filename)
-        gates = Gates(netlist, qs)
-        gates.find_all_the_things()
+        gates = self.get_gates(filename)
 
         self.assertEqual(len(gates.pass_qs), 1)
         self.assertEqual(len(gates.luts), 0)
@@ -369,9 +355,7 @@ class PolychipTestCase(unittest.TestCase):
 
     def test_find_tristate_inverter(self):
         filename = "test/polychip_test_tristate_inverter.svg"
-        netlist, qs, _ = file_to_netlist(filename)
-        gates = Gates(netlist, qs)
-        gates.find_all_the_things()
+        gates = self.get_gates(filename)
 
         self.assertEqual(len(gates.pass_qs), 1)
         self.assertEqual(len(gates.luts), 0)
@@ -387,9 +371,7 @@ class PolychipTestCase(unittest.TestCase):
 
     def test_find_tristate_buffer(self):
         filename = "test/polychip_test_tristate_buffer.svg"
-        netlist, qs, _ = file_to_netlist(filename)
-        gates = Gates(netlist, qs)
-        gates.find_all_the_things()
+        gates = self.get_gates(filename)
 
         self.assertEqual(len(gates.pass_qs), 1)
         self.assertEqual(len(gates.luts), 0)
@@ -402,6 +384,52 @@ class PolychipTestCase(unittest.TestCase):
         self.assertEqual(zbuff.noe, "/OE")
         self.assertEqual(zbuff.num_qs(), 10)
         self.assertEqual(len(gates.qs), 0)
+
+    def test_find_signal_booster(self):
+        filename = "test/polychip_test_signal_booster.svg"
+        gates = self.get_gates(filename)
+
+        self.assertEqual(len(gates.pass_qs), 1)
+        self.assertEqual(len(gates.luts), 0)
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 0)
+        self.assertEqual(len(gates.signal_boosters), 1)
+        g = only(gates.signal_boosters)
+        self.assertEqual(g.input(), "S")
+        self.assertEqual(g.output(), "Y")
+        self.assertEqual(g.num_qs(), 4)
+        self.assertEqual(len(gates.qs), 0)
+
+    def test_find_signal_booster_neg(self):
+        filename = "test/polychip_test_signal_booster_neg.svg"
+        gates = self.get_gates(filename)
+
+        self.assertEqual(len(gates.pass_qs), 2)
+        self.assertEqual(len(gates.luts), 0)
+        self.assertEqual(len(gates.muxes), 1)
+        self.assertEqual(len(gates.nors), 1)
+        self.assertEqual(len(gates.signal_boosters), 0)
+
+    def test_find_pin_input_neg(self):
+        filename = "test/polychip_test_pin_input_neg.svg"
+        gates = self.get_gates(filename)
+
+        self.assertEqual(len(gates.pass_qs), 0)
+        self.assertEqual(len(gates.luts), 0)
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 1)
+        self.assertEqual(len(gates.pin_inputs), 0)
+
+    def test_find_pin_input_pullup(self):
+        filename = "test/polychip_test_pin_input_pullup.svg"
+        gates = self.get_gates(filename)
+
+        self.assertEqual(len(gates.pass_qs), 0)
+        self.assertEqual(len(gates.luts), 0)
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 1)
+        self.assertEqual(len(gates.pin_inputs), 0)
+
 
 
 if __name__ == '__main__':
