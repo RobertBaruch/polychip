@@ -15,7 +15,7 @@
    id="svg2"
    version="1.1"
    inkscape:version="0.92.2 (5c3e80d, 2017-08-06)"
-   sodipodi:docname="polychip_test_pin_input_pullup.svg"
+   sodipodi:docname="polychip_test_pin_input_pulldown.svg"
    inkscape:export-filename="G:\Project5474\8259 AMD 8650\tmp.png"
    inkscape:export-xdpi="95.997665"
    inkscape:export-ydpi="95.997665">
@@ -364,8 +364,8 @@
        id="path1040"
        inkscape:connector-curvature="0" />
     <path
-       style="opacity:1;vector-effect:none;fill:#00ff00;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:8.46691704;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       d="m 1062.0744,430.76581 -2.8284,-291.328 h 46.669 l 4.2426,294.15642 z"
+       style="opacity:1;vector-effect:none;fill:#00ff00;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:7.19017172;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       d="m 1062.0744,625.30176 -2.8284,-210.0923 h 46.669 l 4.2426,212.13203 z"
        id="path1042"
        inkscape:connector-curvature="0" />
     <path
@@ -396,9 +396,9 @@
        id="path1044"
        inkscape:connector-curvature="0" />
     <path
-       style="opacity:1;vector-effect:none;fill:#ff00ff;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:7.55905533;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       d="m 1038.0328,9045.8223 125.865,-1.4142 1.4142,93.3381 -84.8528,5.6569 2.8284,-33.9412 h 52.3259 v -39.5979 l -98.995,1.4142 z"
-       id="path1046"
+       style="display:inline;opacity:1;vector-effect:none;fill:#ff00ff;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:7.55905533;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       d="m 1030.2547,9314.5229 125.865,-1.4142 1.4142,93.3381 -84.8528,5.6569 2.8284,-33.9412 h 52.3259 v -39.5979 l -98.995,1.4142 z"
+       id="path1046-3"
        inkscape:connector-curvature="0" />
   </g>
   <g
@@ -446,11 +446,11 @@
        y="9245.8408" />
     <rect
        style="display:inline;opacity:1;vector-effect:none;fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:33.6979599;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       id="rect1062-4-7-0"
+       id="rect1062-4-7-0-8"
        width="58.754837"
        height="52.512192"
-       x="1066.6382"
-       y="9098.7617" />
+       x="1062.3955"
+       y="9364.6348" />
   </g>
   <g
      inkscape:groupmode="layer"

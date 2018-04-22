@@ -31,6 +31,7 @@ class SchObject(object):
         self.short_libname_offset = None
         self.output_nets = []
         self.input_nets = []
+        self.extra_data = []
 
     def transform(self):
         t = Transform.rotate(self.rotation * math.tau / 4) @ Transform.scale(1, -1)
@@ -58,6 +59,8 @@ class SchObject(object):
         print("F 2 \"\" H {:d} {:d} 20  0001 C CNN".format(x, y), file=f)
         print("F 3 \"\" H {:d} {:d} 20  0001 C CNN".format(x, y), file=f)
         print("F 4 \"{:s}\" H {:d} {:d} 20  0001 C CNN".format(str(self.centroid), x, y), file=f)
+        for i, extra in enumerate(self.extra_data):
+            print("F {:d} \"{:s}\" H {:d} {:d} 20  0001 C CNN".format(i + 5, self.extra_data[i], x, y), file=f)
         print("    1    {:d} {:d}".format(x, y), file=f)
         print(self.transform(), file=f)
         print("$EndComp", file=f)
@@ -222,6 +225,44 @@ class SchGate(SchObject):
                 self.output_offsets = [(200, 0)]
                 self.input_offsets = [(-150, -250), (-150, -150), (-150, -50), (-150, 50), (-150, 150), (-150, 250)]
 
+        elif isinstance(gate, Nand):
+            n = len(gate.inputs)
+            assert n <= 3, "More than 3-input NAND isn't supported for schematic output yet."
+            assert n > 1, "1-input NAND gate makes no sense."
+            self.libname = "{:d}NAND".format(n)
+            self.short_libname = self.libname
+            if n == 2:
+                self.output_offsets = [(200, 0)]
+                self.input_offsets = [(-150, -50), (-150, 50)]
+            elif n == 3:
+                self.output_offsets = [(200, 0)]
+                self.input_offsets = [(-150, -50), (-150, 0), (-150, 50)]
+
+        elif isinstance(gate, Or):
+            n = len(gate.inputs)
+            assert n <= 6, "More than 6-input OR isn't supported for schematic output yet."
+            assert n > 1, "1-input OR gate makes no sense."
+            self.libname = "{:d}OR".format(n)
+            self.short_libname = self.libname
+            x = round(self.sch_loc.x)
+            y = round(self.sch_loc.y)
+            print("Place {:s} at {:d}, {:d}".format(self.libname, x, y))
+            if n == 2:
+                self.output_offsets = [(200, 0)]
+                self.input_offsets = [(-150, -50), (-150, 50)]
+            elif n == 3:
+                self.output_offsets = [(200, 0)]
+                self.input_offsets = [(-150, -50), (-150, 0), (-150, 50)]
+            elif n == 4:
+                self.output_offsets = [(200, 0)]
+                self.input_offsets = [(-150, -150), (-150, -50), (-150, 50), (-150, 150)]
+            elif n == 5:
+                self.output_offsets = [(200, 0)]
+                self.input_offsets = [(-150, -200), (-150, -100), (-150, 0), (-150, 100), (-150, 200)]
+            elif n == 6:
+                self.output_offsets = [(200, 0)]
+                self.input_offsets = [(-150, -250), (-150, -150), (-150, -50), (-150, 50), (-150, 150), (-150, 250)]
+
         elif isinstance(gate, TristateInverter):
             self.libname = "INV_TRISTATE_NEG_OE_SMALL"
             self.short_libname = "ZINV"
@@ -261,6 +302,7 @@ class SchGate(SchObject):
                 self.input_offsets = [(-120, -150), (-120, -90), (-120, -30), (-120, 30), (-120, 90), (-120, 150)]
             elif n == 7:
                 self.input_offsets = [(-120, -180), (-120, -120), (-120, -60), (-120, 0), (-120, 60), (-120, 120), (-120, 180)]
+            self.extra_data.append(gate.truth_table().as_output_string())
 
         elif isinstance(gate, SignalBooster):
             self.libname = "BUFF"
@@ -271,7 +313,7 @@ class SchGate(SchObject):
         elif isinstance(gate, PinInput):
             self.output_offsets = [(150, 0)]
             self.input_offsets = [(-150, 0)]
-            if gate.inv2 is None:
+            if gate.inverting:
                 t = "INV"
             else:
                 t = "BUFF"
@@ -288,10 +330,10 @@ class SchGate(SchObject):
         elif isinstance(gate, PinIO):
             self.output_offsets = [(-240, 0), (70, -190)]
             self.input_offsets = [(220, -40), (220, 70)]
-            if gate.pin_input.inv2 is not None:
-                self.libname = "PIN_IO"
-            else:
+            if gate.pin_input.inverting:
                 self.libname = "PIN_IO_INV"
+            else:
+                self.libname = "PIN_IO"
             self.short_libname = self.libname
 
         else:
@@ -373,6 +415,24 @@ def write_sch_file(filename, drawing_bounding_box, gates):
                 sch_objects[g.name] = SchGate(g)
             else:
                 print("[{:d}-NOR not supported for schematic output; just placing its transistors.".format(
+                    len(g.inputs)))
+                for q in g.qs:
+                    sch_objects[q.name] = SchTransistor(q)
+
+        for g in gates.nands:
+            if len(g.inputs) <= 3:
+                sch_objects[g.name] = SchGate(g)
+            else:
+                print("[{:d}-NAND not supported for schematic output; just placing its transistors.".format(
+                    len(g.inputs)))
+                for q in g.qs:
+                    sch_objects[q.name] = SchTransistor(q)
+
+        for g in gates.ors:
+            if len(g.inputs) <= 6:
+                sch_objects[g.name] = SchGate(g)
+            else:
+                print("[{:d}-OR not supported for schematic output; just placing its transistors.".format(
                     len(g.inputs)))
                 for q in g.qs:
                     sch_objects[q.name] = SchTransistor(q)

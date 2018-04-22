@@ -34,11 +34,11 @@ class Contact(object):
 
     Attributes:
         metal (int): If not None, the index into the InkscapeFile's metal_array
-            this contact connects.    
+            this contact connects.
         poly (int): If not None, the index into the InkscapeFile's poly_array
-            this contact connects.    
+            this contact connects.
         diff (int): If not None, the index into the InkscapeFile's diff_array
-            this contact connects.    
+            this contact connects.
     """
     def __init__(self, path_id, path):
         self.path_id = path_id
@@ -102,9 +102,6 @@ def calculate_contacts(drawing):
         contact.poly = next ((poly_dict[p.wkb] for p in poly_rtree.query(c) if p.intersects(c)), None)
         contact.diff = next ((diff_dict[p.wkb] for p in diff_rtree.query(c) if p.intersects(c)), None)
         contact.metal = next ((metal_dict[p.wkb] for p in metal_rtree.query(c) if p.intersects(c)), None)
-        # contact.metal = next( (i for i, p in enumerate(drawing.metal_array) if p.intersects(c)), None)
-        # contact.diff = next( (i for i, p in enumerate(drawing.diff_array) if p.intersects(c)), None)
-        # contact.poly = next( (i for i, p in enumerate(drawing.poly_array) if p.intersects(c)), None)
         if contact.metal is not None and contact.diff is not None and contact.poly is not None:
             contact.metal = None
         count = 0
@@ -142,9 +139,9 @@ def any_contact_in_polygon(contacts, polygon):
 def find_transistors_and_number_diffs(drawing):
     """Finds transistors and divides diffs at transistor gates.
 
-    The gate of a transistor is defined where poly splits diff without a contact. Diffs 
+    The gate of a transistor is defined where poly splits diff without a contact. Diffs
     at gates are thus split in two.
-    
+
     Args:
         drawing (InkscapeFile): The InkscapeFile object.
 
@@ -173,7 +170,7 @@ def find_transistors_and_number_diffs(drawing):
     t2 = datetime.datetime.now()
     print("Diff contacts: {:d} (in {:f} sec)".format(len(diff_contacts.geoms), (t2 - t1).total_seconds()))
 
-    t1 = datetime.datetime.now()    
+    t1 = datetime.datetime.now()
     rtree = shapely.strtree.STRtree(diff_contacts)
     t2 = datetime.datetime.now()
     print("R-tree constructed in {:f} sec".format((t2 - t1).total_seconds()))
@@ -235,6 +232,7 @@ def get_polygon(nodetype, nodename, drawing):
     elif nodetype == Type.METAL:
         return drawing.metal_array[nodename]
 
+
 def print_node_path(nodes, drawing):
     if len(nodes) == 1:
         nodetype, nodename = next(nodes)
@@ -260,7 +258,7 @@ def print_node_path(nodes, drawing):
         prev_nodename = nodename
         prev_polygon = get_polygon(prev_nodetype, prev_nodename, drawing)
     print("}")
-        
+
 
 def file_to_netlist(file, print_netlist=False, print_qs=False):
     """Converts an Inkscape SVG file to a netlist and transistor list.
@@ -555,7 +553,7 @@ def polychip_decode_json(d):
 
 
 if __name__ == "__main__":
-    version = "0.8RC1"
+    version = "0.8"
     print("Polychip v" + version)
 
     parser = argparse.ArgumentParser(description="Polychip, a program to help recognize transistors and "
@@ -622,43 +620,6 @@ if __name__ == "__main__":
     print("{:d} total transistors".format(len(gates.qs)))
 
     gates.find_all_the_things()
-
-    print("Found {:d} luts".format(len(gates.luts)))
-    for i in range(2, 20):
-        gs = {g for g in gates.luts if len(g.inputs) == i}
-        print("  {:d} {:d}-luts".format(len(gs), i))
-    print("Found {:d} pulldowns".format(len(gates.pulldowns)))
-    print("Found {:d} pass transistors".format(len(gates.pass_qs)))
-    print("Found {:d} muxes (total {:d} qs)".format(len(gates.muxes),
-        sum(g.num_qs() for g in gates.muxes)))
-    for i in range(2, 25):
-        gs = {g for g in gates.muxes if len(g.selecting_inputs) == i}
-        pgs = {g for g in gs if isinstance(g, PowerMultiplexer) }
-        print("  {:d} {:d}-muxes (includes {:d} power muxes)".format(len(gs), i, len(pgs)))
-
-    for i in range(1, 10):
-        nors = {nor for nor in gates.nors if len(nor.inputs) == i}
-        print("Found {:d} {:d}-input NOR gates (total {:d} qs)".format(len(nors), i,
-            sum(g.num_qs() for g in nors)))
-
-    print("Found {:d} tristate inverters (total {:d} qs)".format(len(gates.tristate_inverters),
-        sum(g.num_qs() for g in gates.tristate_inverters)))
-    print("Found {:d} tristate buffers (total {:d} qs)".format(len(gates.tristate_buffers),
-        sum(g.num_qs() for g in gates.tristate_buffers)))
-    print("Found {:d} mux D-latches (total {:d} qs): {:s}".format(len(gates.mux_d_latches),
-        sum(g.num_qs() for g in gates.mux_d_latches),
-        str(list(g.output_power_q.name for g in gates.mux_d_latches))))
-    print("Found {:d} signal boosters (total {:d} qs)".format(len(gates.signal_boosters),
-        sum(g.num_qs() for g in gates.signal_boosters)))
-    print("Found {:d} pin inputs (total {:d} qs)".format(len(gates.pin_inputs),
-        sum(g.num_qs() for g in gates.pin_inputs)))
-    print("Found {:d} pin I/Os (total {:d} qs)".format(len(gates.pin_ios),
-        sum(g.num_qs() for g in gates.pin_ios)))
-
-
-    print("{:d} unallocated transistors:".format(len(gates.qs)))
-    for q in gates.qs:
-        print("  {:s} @ {:s}".format(q.name, str(q.centroid)))
 
     if args.sch:
         write_sch_file("polychip.sch", drawing_bounding_box, gates)

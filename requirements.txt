@@ -2,3 +2,4 @@ networkx==2.1
 Shapely==1.6.4.post1
 matplotlib==2.1.2
 lxml==4.1.1
+numpy==1.14.1

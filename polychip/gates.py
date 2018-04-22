@@ -1,8 +1,10 @@
 import collections
-import re
-import networkx as nx
 import functools
+import itertools
+import networkx as nx
+import numpy
 import pprint
+import re
 import shapely.wkt
 
 def is_power_net(name):
@@ -22,7 +24,7 @@ class Transistor(object):
         name (str): The name of the transistor, if found on the QNames layer, otherwise None.
         gate (int): The index into the InkscapeFile's poly_array that connects to this transistor's gate.
         gate_net (str): The name of the net the gate is connected to.
-        gate_shape (shapely.geometry.Polygon): The polygon outlining the transistor's gate. 
+        gate_shape (shapely.geometry.Polygon): The polygon outlining the transistor's gate.
         centroid (shapely.geometry.Point): The gate shape's centroid.
         electrode0 (int): The index into the InkscapeFile's diff_array that connects to one
             side of this transistor.
@@ -105,6 +107,13 @@ class Transistor(object):
 
     def is_grounding(self):
         return is_ground_net(self.electrode0_net) or is_ground_net(self.electrode1_net)
+
+    def grounded_electrode_net(self):
+        if is_ground_net(self.electrode0_net):
+            return self.electrode0_net
+        if is_ground_net(self.electrode1_net):
+            return self.electrode1_net
+        return None
 
     def is_powering(self):
         return is_power_net(self.electrode0_net) or is_power_net(self.electrode1_net)
@@ -191,35 +200,169 @@ class Gate(object):
         return str(g.name)
 
 
+class TruthTable(object):
+    """A truth table.
+
+    Example of truth table representing A XOR B:
+        inputs = ["A", "B"]
+        table = [0, 1, 1, 0]
+
+    Example of truth table representing a nonsymmetric logic function, A AND /B:
+        inputs = ["A", "B"]
+        table = [0, 1, 0, 0] (see the docs for 'table' to understand the ordering)
+
+    Attributes:
+        inputs ([str]): The list of input net names.
+        table ([int]): A list of outputs, 0 or 1, for each combination of binary inputs. The elements
+                       of the list are in numeric order of input combination, where input[0] is
+                       the least significant bit -- as if the binary input string were constructed from
+                       right to left.
+    """
+    def __init__(self, inputs, table):
+        assert len(table) == 2**len(inputs), (
+            "Truth table does not have the expected number of entries for {:d} inputs. Inputs are {:s}, table "
+            "is {:s}".format(len(inputs), str(inputs), str(table)))
+        self.inputs = inputs
+        self.table = table
+
+    def as_output_string(self):
+        """Returns the string representation of the output table.
+
+        The string representation is a binary string of the outputs read from beginning to end. For example,
+        a truth table representing A XOR B would return "0110", and A AND /B would return "0100".
+        """
+        return "".join(str(e) for e in self.table)
+
+    def permute(self, axes):
+        """Returns a new TruthTable with the inputs permuted in the same way numpy.transpose does.
+
+        Arguments:
+            axes ((int)): A tuple of input index destinations. For example, (0, 1) keeps the input
+                          ordering for a 2-input TruthTable, while (1, 0) reverses the order of the
+                          inputs. This is completely different from *negating* inputs.
+        """
+        inputs = [self.inputs[i] for i in axes]
+        arr = numpy.array(self.table)
+        arr = arr.reshape(tuple([2] * len(self.inputs)))
+        return TruthTable(inputs, arr.transpose(axes).reshape(-1))
+
+    def permutations(self):
+        """Generates successive permutations of the inputs as another TruthTable.
+
+        Note that there are N! permutations for an N-input TruthTable. If you have more than, say, 8
+        inputs, you will probably want to choose a more intelligent algorithm to find what you're looking for,
+        especially when you may not find your target.
+        """
+        input_permutations = itertools.permutations(self.inputs)
+        arr = numpy.array(self.table)
+        arr = arr.reshape(tuple([2] * len(self.inputs)))
+        for input_permutation in input_permutations:
+            perm = tuple([self.inputs.index(input) for input in input_permutation])
+            yield TruthTable(list(input_permutation), arr.transpose(perm).reshape(-1))
+
+    def __str__(self):
+        return str(self.inputs) + " --> " + self.as_output_string()
+
+
 class Lut(Gate):
     """A generalized gate with an nmos resistor at the top and a tree of transistors to
     ground. Within the tree, no electrode may connect to anything except ground, the
     nmos output net, or another in-tree transistor's electrode.
+
+    The inputs to the LUT are the same as the gates of its transistors (minus the pullup transistor).
+    It is possible for several inputs to be connected together!
+
+    Attributes:
+        output_power_q (Transistor): The transistor giving the output power.
+        outputs ([str]): The name of the output nets. Generally the order is significant.
+        inputs ([str]): The list of names of the input nets, the same order as logic_qs.
+        qs ([Transistor]): The list of transistors making up the gate, which includes the pullup.
+        logic_qs ([Transistor]): The list of transistors making up the gate, except the pullup.
+        logic_qs_by_input ({str: {Transistor}}): A dictionary of input net to Transistors whose gate
+                                                 is connected to that net.
+        ground_net (str): The net name of the ground net this LUT grounds to.
+        subgates ([Gate]): The list of gates that make up this gate.
+        neg_ens ([str]): A list of input net names which, when 1, connect the output to ground.
+        non_neg_ens ([str]): A list of input net names which are all the inputs except the neg_ens.
+        nor_input_qs ([Transistor]): A list of Transistors in the gate with electrodes connected
+                                     directly to the output net.
+        graph (nx.Graph): A graph where the edges are Transistors, connecting their electrodes.
     """
     def __init__(self, nmos_resistor_q, output_net, qs):
         assert len(qs) > 1, "LUT qs for output {:s} has only {:d} qs".format(output_net, len(qs))
-        super().__init__(nmos_resistor_q, [output_net], [], qs)
         logic_qs = list(qs)
         logic_qs.remove(nmos_resistor_q)
+        super().__init__(nmos_resistor_q, [output_net], list({q.gate_net for q in logic_qs}), qs)
+
+        self.logic_qs = logic_qs
+        self.logic_qs_by_input = set_dictionary(((q.gate_net, q) for q in logic_qs))
+        self.ground_net = only({q.grounded_electrode_net() for q in self.logic_qs if q.is_grounding()})
+
         neg_ens = {q.gate_net for q in logic_qs if q.is_grounding() and q.nongrounded_electrode_net() == output_net}
         self.neg_ens = list(neg_ens)
+
         self.non_neg_ens = list({q.gate_net for q in logic_qs} - neg_ens)
-        self.replace_inputs(self.neg_ens + self.non_neg_ens)
         self.nor_input_qs = [q for q in logic_qs if q.is_electrode_connected_to(output_net)]
+
         self.graph = nx.Graph()
-        for q in logic_qs:
+        for q in self.logic_qs:
             self.graph.add_edge(q.electrode0_net, q.electrode1_net, q=q)
 
+    def n_inputs(self):
+        """Returns the number of inputs to this LUT."""
+        return len(self.logic_qs_by_input)
+
     def is_nor(self):
+        """Returns whether this LUT is a NOR gate."""
         return len(self.non_neg_ens) == 0
 
     def is_nand(self):
-        grounds = {n for n in self.graph if is_ground_net(n)}
-        if len(grounds) > 1:
-            return False
-        paths = nx.all_simple_paths(self.graph, self.output(), only(grounds))
+        """Returns whether this LUT is a NAND gate."""
+        paths = nx.all_simple_paths(self.graph, self.output(), self.ground_net)
         next(paths)
         return next(paths, None) == None  # There was only one path to ground.
+
+    def f(self, i):
+        """Computes the binary output for a dictionary of net name to binary input for this LUT.
+
+        The keys in the dictionary must completely cover the input nets for this LUT, else an assertion is raised.
+
+        There are a few ways we could determine this, but I've chosen to recreate the graph without the edges for
+        transistors that are not on, and see if there's a path from the output to ground.
+
+        Args:
+            i ({str: int}): The dictionary of net name to binary input, each input either 0 or 1.
+
+        Returns:
+            int: The binary output, either 0 or 1.
+        """
+        assert all(x in i for x in self.logic_qs_by_input), "Input {:s} does not cover LUT inputs {:s}".format(
+            str(list(i.keys())), str(list(self.logic_qs_by_input.keys())))
+        G = nx.Graph()
+        for q in self.logic_qs:
+            if i[q.gate_net] == 1:
+                G.add_edge(q.electrode0_net, q.electrode1_net, q=q)
+        if self.output() not in G or self.ground_net not in G:
+            return 1
+        paths = nx.all_simple_paths(G, self.output(), self.ground_net)
+        if next(paths, None) == None:
+            return 1
+        return 0
+
+    def truth_table(self):
+        """Returns the truth table for the LUT.
+
+        Warning: this is O(2**N). No shortcuts are taken.
+        """
+        assert self.n_inputs() <= 10, "More than 10 inputs not supported for LUT truth tables"
+        n = self.n_inputs()
+        format_string = "{{:0{:d}b}}".format(n)
+        outs = []
+        for i in range(0, 2**n):
+            b = format_string.format(i)
+            ins = {self.inputs[n - x - 1]: int(b[x]) for x in range(0, n)}
+            outs.append(self.f(ins))
+        return TruthTable(self.inputs, outs)
 
 
 class PassTransistor(Gate):
@@ -298,6 +441,19 @@ class PowerMultiplexer(Multiplexer):
         self.inputs.extend(self.low_inputs)
 
 
+class EncodedMultiplexer(Gate):
+    """A multiplexer that has a single selector input which selects between two signals.
+
+    This is formed with an inverter and a 4-LUT. Two inputs to the 4-LUT are the logic inputs,
+    one input is the selector input, and the other input is the invert of the selector input.
+
+    The 4-LUT must compute some input permutation of /Y = AB + CD, and the inverter must be between
+    one of the pairs {AC, AD, BC, BD}.
+    """
+    def __init__(self):
+        pass
+
+
 class NorGate(Lut):
     def __init__(self, lut):
         super().__init__(lut.output_power_q, only(lut.outputs), lut.qs)
@@ -338,6 +494,13 @@ class Nand(Lut):
             'type': 'NAND',
         })
         return d
+
+
+class Or(Gate):
+    def __init__(self, nor, inv):
+        super().__init__(inv.output_power_q, inv.outputs, nor.inputs, [], [nor, inv])
+        self.nor = nor
+        self.inv = inv
 
 
 class TristateInverter(Gate):
@@ -451,6 +614,7 @@ class PinInput(Gate):
         self.inv2 = inv2
         self.pullup = pullup
         self.pulldown = pulldown
+        self.inverting = inv2 is None
 
 
 class PinIO(Gate):
@@ -536,6 +700,7 @@ class Gates(object):
         self.muxes = set()
         self.nors = set()
         self.nands = set()
+        self.ors = set()
         self.tristate_inverters = set()
         self.tristate_buffers = set()
         self.mux_d_latches = set()
@@ -545,9 +710,10 @@ class Gates(object):
 
     def all_gates(self):
         all = set()
-        for gs in [self.pulldowns, self.pullups, self.pass_qs, self.luts, self.muxes, self.nors,
-                self.nands, self.tristate_inverters, self.tristate_buffers, self.mux_d_latches,
-                self.signal_boosters, self.pin_inputs, self.pin_ios]:
+        for gs in [self.pulldowns, self.pullups, self.pass_qs, self.luts, self.muxes,
+                self.nors, self.nands, self.ors, self.tristate_inverters,
+                self.tristate_buffers, self.mux_d_latches, self.signal_boosters,
+                self.pin_inputs, self.pin_ios]:
             all.update(gs)
         return all
 
@@ -569,6 +735,7 @@ class Gates(object):
         self.find_muxes()
         self.find_nors()
         self.find_nands()
+        self.find_ors()
         self.find_tristate_inverters()
         self.find_tristate_buffers()
         self.find_mux_d_latches()
@@ -576,6 +743,72 @@ class Gates(object):
         self.find_signal_boosters()
         self.find_pin_inputs()
         self.find_pin_ios()
+
+        self.print_found()
+
+    def print_found(self):
+        print("=====================================================")
+        print("Found {:d} nmos resistor pullups".format(len(self.nmos_resistor_qs)))
+        print("Found {:d} pullups".format(len(self.pullups)))
+        print("Found {:d} pulldowns".format(len(self.pulldowns)))
+
+        print("Found {:d} luts".format(len(self.luts)))
+        for i in range(1, 21):
+            gs = {g for g in self.luts if len(g.inputs) == i}
+            if len(gs) != 0:
+                print("  {:d} {:d}-luts".format(len(gs), i))
+
+        print("Found {:d} pass transistors".format(len(self.pass_qs)))
+
+        print("Found {:d} muxes (total {:d} qs)".format(len(self.muxes),
+            sum(g.num_qs() for g in self.muxes)))
+        for i in range(2, 17):
+            gs = {g for g in self.muxes if len(g.selecting_inputs) == i}
+            if len(gs) != 0:
+                pgs = {g for g in gs if isinstance(g, PowerMultiplexer)}
+                print("  {:d} {:d}-muxes (includes {:d} power muxes)".format(len(gs), i, len(pgs)))
+
+        print("Found {:d} NOR gates (total {:d} qs)".format(len(self.nors),
+            sum(g.num_qs() for g in self.nors)))
+        for i in range(1, 11):
+            gs = {g for g in self.nors if len(g.inputs) == i}
+            if len(gs) != 0:
+                print("  {:d} {:d}-input NOR gates (total {:d} qs)".format(len(gs), i,
+                    sum(g.num_qs() for g in gs)))
+
+        print("Found {:d} NAND gates (total {:d} qs)".format(len(self.nands),
+            sum(g.num_qs() for g in self.nands)))
+        for i in range(1, 4):
+            gs = {g for g in self.nands if len(g.inputs) == i}
+            if len(gs) != 0:
+                print("  {:d} {:d}-input NAND gates (total {:d} qs)".format(len(gs), i,
+                    sum(g.num_qs() for g in gs)))
+
+        print("Found {:d} OR gates (total {:d} qs)".format(len(self.ors),
+            sum(g.num_qs() for g in self.ors)))
+        for i in range(1, 11):
+            gs = {g for g in self.ors if len(g.inputs) == i}
+            if len(gs) != 0:
+                print("  {:d} {:d}-input OR gates (total {:d} qs)".format(len(gs), i,
+                    sum(g.num_qs() for g in gs)))
+
+        print("Found {:d} tristate inverters (total {:d} qs)".format(len(self.tristate_inverters),
+            sum(g.num_qs() for g in self.tristate_inverters)))
+        print("Found {:d} tristate buffers (total {:d} qs)".format(len(self.tristate_buffers),
+            sum(g.num_qs() for g in self.tristate_buffers)))
+        print("Found {:d} mux D-latches (total {:d} qs): {:s}".format(len(self.mux_d_latches),
+            sum(g.num_qs() for g in self.mux_d_latches),
+            str(list(g.output_power_q.name for g in self.mux_d_latches))))
+        print("Found {:d} signal boosters (total {:d} qs)".format(len(self.signal_boosters),
+            sum(g.num_qs() for g in self.signal_boosters)))
+        print("Found {:d} pin inputs (total {:d} qs)".format(len(self.pin_inputs),
+            sum(g.num_qs() for g in self.pin_inputs)))
+        print("Found {:d} pin I/Os (total {:d} qs)".format(len(self.pin_ios),
+            sum(g.num_qs() for g in self.pin_ios)))
+
+        print("{:d} unallocated transistors:".format(len(self.qs)))
+        for q in self.qs:
+            print("  {:s} @ {:s}".format(q.name, str(q.centroid)))
 
     def remove_q(self, q):
         # if q in self.grounding_qs:
@@ -613,7 +846,7 @@ class Gates(object):
 
     def nets_with_n_gates_iter(self, n, net_iter):
         return (net for net in net_iter if len(self.gate_qs_in(net)) == n)
-        
+
     def nets_with_n_grounding_qs_iter(self, n, net_iter):
         return (net for net in net_iter if len(self.grounding_qs & self.electrode_qs_in(net)) == n)
 
@@ -683,6 +916,16 @@ class Gates(object):
             self.remove_q(g.q())
 
     def find_luts2(self):
+        # First, make a graph where the edges are transistors (but not the nmos_resistor_qs).
+        #
+        # The __GATE__ node coalesces any gate that is _not_ pulled up.
+        # What we want to disqualify as a LUT is a tree of transistors that goes from a pulled-up
+        # net to ground, but somewhere in the middle, we feed a gate. The only gates a LUT is allowed
+        # to feed are the gates that connect to the pulled-up net. This is why we want to pay special
+        # attention to gates that are not pulled up, and ignore gates that are pulled up.
+        #
+        # All grounded nodes are separated into unique nodes -- we only want them to terminate paths,
+        # not be part of a path.
         G = nx.Graph()
         for i, q in enumerate(self.qs - self.nmos_resistor_qs):
             if not q.is_powering():
@@ -693,21 +936,24 @@ class Gates(object):
             if q.gate_net not in self.pulled_up_nets:
                 G.add_edge(q.gate_net, "__GATE__", q=q)
 
-        # No gates anywhere? Then just return.
-        if "__GATE__" not in G:
-            return
-
-        # find all simple paths from a pulled-up net to a gate.
+        # Find all simple paths from a pulled-up net to an unpowered gate.
         pass_paths = []
-        for pullup_q, net in ((q, q.nonvcc_electrode_net()) for q in self.nmos_resistor_qs):
-            if net not in G:
-                continue
-            pass_paths.extend(list(nx.all_simple_paths(G, net, "__GATE__")))
-        print("{:d} paths lead from pullups to a gate.".format(len(pass_paths)))
+        if "__GATE__" in G:
+            for pullup_q, net in ((q, q.nonvcc_electrode_net()) for q in self.nmos_resistor_qs):
+                if net not in G:
+                    continue
+                pass_paths.extend(list(nx.all_simple_paths(G, net, "__GATE__")))
+        print("find_luts2: {:d} paths lead from pullups to a gate.".format(len(pass_paths)))
+
+        # Remove all paths that lead from a pulled-up net to an unpowered gate, because those
+        # are not allowed to be considered for LUTs.
         for path in map(nx.utils.pairwise, pass_paths):
             for edge in (edge for edge in path if G.has_edge(edge[0], edge[1])):
                 G.remove_edge(edge[0], edge[1])
 
+        # Now the connected components in the graph are mainly LUTs. We immediately can eliminate
+        # components which are just a pullup with no connections to ground. That's probably just
+        # a pullup for maybe a pin input.
         for net in (net for net in nx.connected_components(G) if len(net & self.pulled_up_nets) == 1):
             subgraph = G.subgraph(net).copy()
             output_net = only(net & self.pulled_up_nets)
@@ -722,7 +968,10 @@ class Gates(object):
                 print("Error: pulled up net {:s} (by Q {:s} @ {:s}) has no ground path".format(
                     output_net, nmos_resistor_q.name, str(nmos_resistor_q.centroid)))
                 continue
+            # The qs in the LUT are the edges, plus the pullup resistor.
             qs = {q for u, v, q in subgraph.edges.data('q')} | {nmos_resistor_q}
+            # This probably shouldn't happen, since I think we eliminated this possibility in the initial loop.
+            # Maybe this should be an assert?
             if len(qs) < 2:
                 continue
             lut = Lut(nmos_resistor_q, output_net, qs)
@@ -810,12 +1059,12 @@ class Gates(object):
 
         # Upgrade muxes to power muxes. A power mux selects between power and ground.
         for mux in muxes:
-            if (any(q.is_powering() for q in mux.qs) and 
+            if (any(q.is_powering() for q in mux.qs) and
                 any(q.is_grounding() for q in mux.qs) and
                 all(q.is_powering() or q.is_grounding() for q in mux.qs)):
                 self.muxes.add(PowerMultiplexer(mux))
             else:
-                self.muxes.add(mux)                
+                self.muxes.add(mux)
 
         for mux in self.muxes:
             for pass_q in mux.subgates:
@@ -831,7 +1080,7 @@ class Gates(object):
             self.luts.remove(nor.lut)
 
         # See if any are high-drive. A high-drive NOR gate is a NOR gate whose output
-        # feeds exactly two powered transistors (one is the gate's own nmos resistor), 
+        # feeds exactly two powered transistors (one is the gate's own nmos resistor),
         # and the other transisor's electrode net is connected
         # to exactly n grounding transistors, whose gates are connected to the gates of
         # the NOR's inputs.
@@ -863,6 +1112,26 @@ class Gates(object):
         for nand in self.nands:
             self.luts.remove(nand.lut)
 
+    def find_ors(self):
+        """Finds OR gates which are NOR gates followed by an inverter."""
+        invs = self.invs()
+        invs_by_input = set_dictionary((inv.input(), inv) for inv in invs)
+
+        # Find NOR gates feeding one and only one input
+        gates_by_input = self.gates_by_input()
+        nors = (n for n in self.nors if len(n.inputs) > 1 and len(gates_by_input[n.output()]) == 1)
+
+        # Find NOR gates that feed an inverter
+        nors = (n for n in nors if n.output() in invs_by_input)
+
+        for nor in nors:
+            inv = only(invs_by_input[nor.output()])
+            self.ors.add(Or(nor, inv))
+
+        for g in self.ors:
+            self.nors.remove(g.nor)
+            self.nors.remove(g.inv)
+
     def find_tristate_inverters(self):
         """Finds tristate inverters. This is O(N).
 
@@ -887,8 +1156,8 @@ class Gates(object):
         invs_by_input = set_dictionary((inv.input(), inv) for inv in invs)
 
         nor2_by_output = {nor.output(): nor for nor in nor2s}
-        nor2s_by_input = set_dictionary((input, nor) 
-            for nor in nor2s 
+        nor2s_by_input = set_dictionary((input, nor)
+            for nor in nor2s
             for input in nor.inputs)
 
         # Go through the muxes fed by pairs of nors that also have one common input (/oe).
@@ -956,8 +1225,8 @@ class Gates(object):
         invs_by_input = set_dictionary((inv.input(), inv) for inv in invs)
 
         nor2_by_output = {nor.output(): nor for nor in nor2s}
-        nor2s_by_input = set_dictionary((input, nor) 
-            for nor in nor2s 
+        nor2s_by_input = set_dictionary((input, nor)
+            for nor in nor2s
             for input in nor.inputs)
 
         # Go through the muxes fed by pairs of nors that also have one common input (/oe).
@@ -999,8 +1268,8 @@ class Gates(object):
 
                  _____    +----------------- /Q
          +------|     |   |   _____
-         |      | nor |o--+--|     |
-         |   +--|_____|      | nor |o----+--  Q
+         |      | lut |o--+--|     |
+         |   +--|_____|      | lut |o----+--  Q
          |   |            +--|_____|     |
          |   |            |              |
         SET  | Y         CLR          X0 |
@@ -1016,21 +1285,7 @@ class Gates(object):
         # Get just those muxes that go in the gate.
         muxes = {g for g in self.muxes if type(g) != PowerMultiplexer and len(g.selected_inputs) == 2}
 
-        # for mux in muxes:
-        #     q_nor = next((nor for nor in self.nors if any(mux_input == nor.output() for mux_input in mux.selected_inputs)), None)
-        #     if q_nor is None:
-        #         continue
-        #     nq_nor_candidates = (nor for nor in self.nors if any(nor_input == mux.output() for nor_input in nor.inputs))
-        #     nq_nor_candidates = [nor for nor in nq_nor_candidates if any(qnor_input == nor.output() for qnor_input in q_nor.inputs)]
-        #     if len(nq_nor_candidates) != 1:
-        #         continue
-        #     self.mux_d_latches.add(MuxDLatch(mux, q_nor, only(nq_nor_candidates)))
-
-        # for g in self.mux_d_latches:
-        #     self.nors.remove(g.q_nor)
-        #     self.nors.remove(g.nq_nor)
-        #     self.muxes.remove(g.mux)
-
+        # The luts must have at least one negative enable for them to be part of this gate.
         luts = [lut for lut in self.luts if len(lut.neg_ens) > 0]
         luts.extend(self.nors)
         for mux in muxes:

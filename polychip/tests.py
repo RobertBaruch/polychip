@@ -45,7 +45,7 @@ class PolychipTestCase(unittest.TestCase):
                 'expected': {
                     'VCC': {(Type.E0, '0')},
                     'OUT': {(Type.GATE, '0'), (Type.E1, '0'), (Type.E0, '1')},
-                    'GND': {(Type.E1, '1')}, 
+                    'GND': {(Type.E1, '1')},
                     'IN': {(Type.GATE, '1')}
                 }
             },
@@ -53,20 +53,20 @@ class PolychipTestCase(unittest.TestCase):
                 'expected': {
                     'VCC': {(Type.E0, '0')},
                     'OUT': {(Type.GATE, '0'), (Type.E1, '0'), (Type.E0, '1')},
-                    'GND': {(Type.E1, '1')}, 
+                    'GND': {(Type.E1, '1')},
                     'IN': {(Type.GATE, '1')}
                 }
             },
             'power_transistor': {
                 'expected': {
-                    'PINX': {(Type.E1, '9'), (Type.E0, '7'), (Type.E0, '10'), (Type.E1, '15'), (Type.E1, '0'), 
-                        (Type.E0, '12'), (Type.E0, '8'), (Type.E1, '11'), (Type.E0, '3'), (Type.E0, '1'), 
+                    'PINX': {(Type.E1, '9'), (Type.E0, '7'), (Type.E0, '10'), (Type.E1, '15'), (Type.E1, '0'),
+                        (Type.E0, '12'), (Type.E0, '8'), (Type.E1, '11'), (Type.E0, '3'), (Type.E0, '1'),
                         (Type.E0, '5'), (Type.E0, '14'), (Type.E0, '2'), (Type.E0, '6'), (Type.E0, '4'), (Type.E1, '13')},
-                    'GND': {(Type.E0, '13'), (Type.E1, '10'), (Type.E0, '11'), (Type.E0, '9'), (Type.E1, '12'), 
+                    'GND': {(Type.E0, '13'), (Type.E1, '10'), (Type.E0, '11'), (Type.E0, '9'), (Type.E1, '12'),
                         (Type.E0, '0'), (Type.E0, '15'), (Type.E1, '14')},
-                    'VCC': {(Type.E1, '3'), (Type.E1, '6'), (Type.E1, '4'), (Type.E1, '2'), (Type.E1, '5'), 
+                    'VCC': {(Type.E1, '3'), (Type.E1, '6'), (Type.E1, '4'), (Type.E1, '2'), (Type.E1, '5'),
                         (Type.E1, '7'), (Type.E1, '1'), (Type.E1, '8')},
-                    'X-': {(Type.GATE, '10'), (Type.GATE, '9'), (Type.GATE, '11'), (Type.GATE, '14'), 
+                    'X-': {(Type.GATE, '10'), (Type.GATE, '9'), (Type.GATE, '11'), (Type.GATE, '14'),
                         (Type.GATE, '15'), (Type.GATE, '0'), (Type.GATE, '13'), (Type.GATE, '12')},
                     'X+': {(Type.GATE, '7'), (Type.GATE, '4'), (Type.GATE, '6'), (Type.GATE, '5'), (Type.GATE, '3'),
                         (Type.GATE, '2'), (Type.GATE, '8'), (Type.GATE, '1')}
@@ -74,31 +74,31 @@ class PolychipTestCase(unittest.TestCase):
             },
             'power_transistors': {
                 'expected': {
-                    'PINX': {(Type.E0, '11'), (Type.E0, '14'), (Type.E0, '23'), (Type.E1, '22'), 
-                        (Type.E0, '12'), (Type.E0, '19'), (Type.E1, '24'), (Type.E0, '9'), (Type.E1, '20'), 
-                        (Type.E0, '15'), (Type.E1, '17'), (Type.E1, '25'), (Type.E0, '13'), (Type.E0, '10'), 
-                        (Type.E0, '21'), (Type.E0, '16')}, 'PINY': {(Type.E0, '29'), (Type.E1, '32'), 
-                        (Type.E0, '3'), (Type.E1, '30'), (Type.E0, '8'), (Type.E0, '0'), (Type.E0, '2'), 
-                        (Type.E0, '1'), (Type.E1, '26'), (Type.E0, '27'), (Type.E0, '5'), (Type.E0, '31'), 
+                    'PINX': {(Type.E0, '11'), (Type.E0, '14'), (Type.E0, '23'), (Type.E1, '22'),
+                        (Type.E0, '12'), (Type.E0, '19'), (Type.E1, '24'), (Type.E0, '9'), (Type.E1, '20'),
+                        (Type.E0, '15'), (Type.E1, '17'), (Type.E1, '25'), (Type.E0, '13'), (Type.E0, '10'),
+                        (Type.E0, '21'), (Type.E0, '16')}, 'PINY': {(Type.E0, '29'), (Type.E1, '32'),
+                        (Type.E0, '3'), (Type.E1, '30'), (Type.E0, '8'), (Type.E0, '0'), (Type.E0, '2'),
+                        (Type.E0, '1'), (Type.E1, '26'), (Type.E0, '27'), (Type.E0, '5'), (Type.E0, '31'),
                         (Type.E0, '6'), (Type.E1, '28'), (Type.E0, '4'), (Type.E0, '7')},
-                    'GND': {(Type.E1, '21'), (Type.E0, '30'), (Type.E0, '22'), (Type.E1, '29'), 
-                        (Type.E0, '32'), (Type.E1, '19'), (Type.E1, '23'), (Type.E0, '17'), (Type.E0, '20'), 
-                        (Type.E1, '0'), (Type.E0, '18'), (Type.E0, '26'), (Type.E1, '27'), (Type.E1, '31'), 
+                    'GND': {(Type.E1, '21'), (Type.E0, '30'), (Type.E0, '22'), (Type.E1, '29'),
+                        (Type.E0, '32'), (Type.E1, '19'), (Type.E1, '23'), (Type.E0, '17'), (Type.E0, '20'),
+                        (Type.E1, '0'), (Type.E0, '18'), (Type.E0, '26'), (Type.E1, '27'), (Type.E1, '31'),
                         (Type.E0, '24'), (Type.E0, '28'), (Type.E0, '25')},
-                    'VCC': {(Type.E1, '14'), (Type.E1, '15'), (Type.E1, '3'), (Type.E1, '5'), (Type.E1, '8'), 
-                        (Type.E1, '16'), (Type.E1, '11'), (Type.E1, '1'), (Type.E1, '9'), (Type.E1, '2'), 
+                    'VCC': {(Type.E1, '14'), (Type.E1, '15'), (Type.E1, '3'), (Type.E1, '5'), (Type.E1, '8'),
+                        (Type.E1, '16'), (Type.E1, '11'), (Type.E1, '1'), (Type.E1, '9'), (Type.E1, '2'),
                         (Type.E1, '12'), (Type.E1, '6'), (Type.E1, '13'), (Type.E1, '7'), (Type.E1, '10'),
                         (Type.E1, '4')},
-                    '__net__0': {(Type.E1, '18')}, 
-                    'Y-': {(Type.GATE, '0'), (Type.GATE, '27'), (Type.GATE, '30'), (Type.GATE, '26'), 
+                    '__net__0': {(Type.E1, '18')},
+                    'Y-': {(Type.GATE, '0'), (Type.GATE, '27'), (Type.GATE, '30'), (Type.GATE, '26'),
                         (Type.GATE, '31'), (Type.GATE, '32'), (Type.GATE, '29'), (Type.GATE, '28')},
-                    'X-': {(Type.GATE, '19'), (Type.GATE, '21'), (Type.GATE, '20'), (Type.GATE, '22'), 
-                        (Type.GATE, '23'), (Type.GATE, '24'), (Type.GATE, '17'), (Type.GATE, '25')}, 
+                    'X-': {(Type.GATE, '19'), (Type.GATE, '21'), (Type.GATE, '20'), (Type.GATE, '22'),
+                        (Type.GATE, '23'), (Type.GATE, '24'), (Type.GATE, '17'), (Type.GATE, '25')},
                     '__net__1': {(Type.GATE, '18')},
-                    'Y+': {(Type.GATE, '7'), (Type.GATE, '5'), (Type.GATE, '2'), (Type.GATE, '6'), 
+                    'Y+': {(Type.GATE, '7'), (Type.GATE, '5'), (Type.GATE, '2'), (Type.GATE, '6'),
                         (Type.GATE, '1'), (Type.GATE, '4'), (Type.GATE, '3'), (Type.GATE, '8')},
-                    'X+': {(Type.GATE, '9'), (Type.GATE, '10'), (Type.GATE, '16'), (Type.GATE, '15'), 
-                        (Type.GATE, '12'), (Type.GATE, '11'), (Type.GATE, '14'), (Type.GATE, '13')}                
+                    'X+': {(Type.GATE, '9'), (Type.GATE, '10'), (Type.GATE, '16'), (Type.GATE, '15'),
+                        (Type.GATE, '12'), (Type.GATE, '11'), (Type.GATE, '14'), (Type.GATE, '13')}
                 }
             },
             'qnames': {
@@ -111,14 +111,14 @@ class PolychipTestCase(unittest.TestCase):
             },
             'sample1': {
                 'expected': {
-                    'X1': {(Type.GATE, '4')}, 
-                    'L2': {(Type.GATE, '3')}, 
-                    'X2': {(Type.E1, '4')}, 
-                    'L4': {(Type.E1, '2'), (Type.E0, '1')}, 
-                    'L1': {(Type.E0, '0'), (Type.E1, '5')}, 
-                    'X3': {(Type.GATE, '0'), (Type.GATE, '2'), (Type.E1, '0'), (Type.E1, '1')}, 
-                    '__net__0': {(Type.E0, '3'), (Type.E0, '4'), (Type.GATE, '1')}, 
-                    '__net__1': {(Type.E0, '5'), (Type.E1, '3'), (Type.GATE, '5'), (Type.E0, '2')}                
+                    'X1': {(Type.GATE, '4')},
+                    'L2': {(Type.GATE, '3')},
+                    'X2': {(Type.E1, '4')},
+                    'L4': {(Type.E1, '2'), (Type.E0, '1')},
+                    'L1': {(Type.E0, '0'), (Type.E1, '5')},
+                    'X3': {(Type.GATE, '0'), (Type.GATE, '2'), (Type.E1, '0'), (Type.E1, '1')},
+                    '__net__0': {(Type.E0, '3'), (Type.E0, '4'), (Type.GATE, '1')},
+                    '__net__1': {(Type.E0, '5'), (Type.E1, '3'), (Type.GATE, '5'), (Type.E0, '2')}
                 }
             },
             'compute_distance_properly': {
@@ -151,7 +151,12 @@ class PolychipTestCase(unittest.TestCase):
         filename = "test/" + key + ".svg"
         netlist, _, _ = file_to_netlist(filename)
         self.assertEqual(self.test_dict[key]['expected'], netlist)
-        # self.assertListsEqualInAnyOrder(self.test_dict[key]['expected'], netlist)
+
+    def get_gates(self, filename):
+        netlist, qs, drawing = file_to_netlist(filename)
+        gates = Gates(netlist, qs, drawing.pnames)
+        gates.find_all_the_things()
+        return gates
 
     def test_polygon_1hole_split_correctly(self):
         self.do_test(sys._getframe().f_code.co_name)
@@ -200,12 +205,6 @@ class PolychipTestCase(unittest.TestCase):
         key = testname[5:]
         filename = "test/" + key + ".svg"
         self.assertRaises(AssertionError, file_to_netlist, filename)
-
-    def get_gates(self, filename):
-        netlist, qs, drawing = file_to_netlist(filename)
-        gates = Gates(netlist, qs, drawing.pnames)
-        gates.find_all_the_things()
-        return gates
 
     def test_find_parallel_qs(self):
         filename = "test/polychip_test_parallel_qs.svg"
@@ -261,6 +260,20 @@ class PolychipTestCase(unittest.TestCase):
         self.assertEqual(set(nor.inputs), {"IN1", "IN2"})
         self.assertEqual(nor.output(), "OUT")
         self.assertEqual(nor.num_qs(), 3)
+        self.assertEqual(len(gates.qs), 0)
+
+    def test_find_2or(self):
+        filename = "test/polychip_test_2or.svg"
+        gates = self.get_gates(filename)
+
+        self.assertEqual(len(gates.luts), 0)
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 0)
+        self.assertEqual(len(gates.ors), 1)
+        g = only(gates.ors)
+        self.assertEqual(set(g.inputs), {"IN1", "IN2"})
+        self.assertEqual(g.output(), "OUT")
+        self.assertEqual(g.num_qs(), 5)
         self.assertEqual(len(gates.qs), 0)
 
     def test_find_3nand(self):
@@ -424,12 +437,120 @@ class PolychipTestCase(unittest.TestCase):
         filename = "test/polychip_test_pin_input_pullup.svg"
         gates = self.get_gates(filename)
 
+        self.assertEqual(len(gates.pass_qs), 1)
+        self.assertEqual(len(gates.luts), 0)
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 0)
+        self.assertEqual(len(gates.pin_inputs), 1)
+        g = only(gates.pin_inputs)
+        self.assertEqual(g.input(), "PIN")
+        self.assertEqual(g.output(), "OUT")
+        self.assertTrue(g.inverting)
+        self.assertIsNone(g.pulldown)
+        self.assertIsNotNone(g.pullup)
+
+    def test_find_pin_input_pullup_pulldown(self):
+        filename = "test/polychip_test_pin_input_pullup_pulldown.svg"
+        gates = self.get_gates(filename)
+
+        self.assertEqual(len(gates.pass_qs), 1)
+        self.assertEqual(len(gates.luts), 0)
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 0)
+        self.assertEqual(len(gates.pin_inputs), 1)
+        g = only(gates.pin_inputs)
+        self.assertEqual(g.input(), "PIN")
+        self.assertEqual(g.output(), "OUT")
+        self.assertTrue(g.inverting)
+        self.assertIsNotNone(g.pulldown)
+        self.assertIsNotNone(g.pullup)
+
+    def test_find_pin_input_pulldown(self):
+        filename = "test/polychip_test_pin_input_pulldown.svg"
+        gates = self.get_gates(filename)
+
+        self.assertEqual(len(gates.pass_qs), 1)
+        self.assertEqual(len(gates.luts), 0)
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 0)
+        self.assertEqual(len(gates.pin_inputs), 1)
+        g = only(gates.pin_inputs)
+        self.assertEqual(g.input(), "PIN")
+        self.assertEqual(g.output(), "OUT")
+        self.assertTrue(g.inverting)
+        self.assertIsNotNone(g.pulldown)
+        self.assertIsNone(g.pullup)
+
+    def test_find_pin_input_noninv_pullup(self):
+        filename = "test/polychip_test_pin_input_noninv_pullup.svg"
+        gates = self.get_gates(filename)
+
         self.assertEqual(len(gates.pass_qs), 0)
         self.assertEqual(len(gates.luts), 0)
         self.assertEqual(len(gates.muxes), 0)
-        self.assertEqual(len(gates.nors), 1)
-        self.assertEqual(len(gates.pin_inputs), 0)
+        self.assertEqual(len(gates.nors), 0)
+        self.assertEqual(len(gates.pin_inputs), 1)
+        g = only(gates.pin_inputs)
+        self.assertEqual(g.input(), "PIN")
+        self.assertEqual(g.output(), "OUT")
+        self.assertFalse(g.inverting)
+        self.assertIsNone(g.pulldown)
+        self.assertIsNotNone(g.pullup)
 
+    def test_find_pin_input_noninv_pullup_pulldown(self):
+        filename = "test/polychip_test_pin_input_noninv_pullup_pulldown.svg"
+        gates = self.get_gates(filename)
+
+        self.assertEqual(len(gates.pass_qs), 0)
+        self.assertEqual(len(gates.luts), 0)
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 0)
+        self.assertEqual(len(gates.pin_inputs), 1)
+        g = only(gates.pin_inputs)
+        self.assertEqual(g.input(), "PIN")
+        self.assertEqual(g.output(), "OUT")
+        self.assertFalse(g.inverting)
+        self.assertIsNotNone(g.pulldown)
+        self.assertIsNotNone(g.pullup)
+
+    def test_find_pin_input_noninv_pulldown(self):
+        filename = "test/polychip_test_pin_input_noninv_pulldown.svg"
+        gates = self.get_gates(filename)
+
+        self.assertEqual(len(gates.pass_qs), 0)
+        self.assertEqual(len(gates.luts), 0)
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 0)
+        self.assertEqual(len(gates.pin_inputs), 1)
+        g = only(gates.pin_inputs)
+        self.assertEqual(g.input(), "PIN")
+        self.assertEqual(g.output(), "OUT")
+        self.assertFalse(g.inverting)
+        self.assertIsNotNone(g.pulldown)
+        self.assertIsNone(g.pullup)
+
+    def test_permute_truth_table_no_change(self):
+        t = TruthTable(["A", "B"], [0, 1, 0, 0]) # A AND /B
+        t2 = t.permute((0, 1))
+        self.assertEqual(t2.inputs, ["A", "B"])
+        self.assertEqual(t2.as_output_string(), "0100")
+
+    def test_permute_truth_table_swap_inputs(self):
+        t = TruthTable(["A", "B"], [0, 1, 0, 0]) # A AND /B
+        t2 = t.permute((1, 0))
+        self.assertEqual(t2.inputs, ["B", "A"])
+        self.assertEqual(t2.as_output_string(), "0010")
+
+    def test_gate_truth_table_2nor(self):
+        filename = "test/polychip_test_2nor.svg"
+        gates = self.get_gates(filename)
+
+        self.assertEqual(len(gates.luts), 0)
+        self.assertEqual(len(gates.muxes), 0)
+        self.assertEqual(len(gates.nors), 1)
+        nor = only(gates.nors)
+        table = nor.truth_table()
+        self.assertEqual(table.as_output_string(), "1000")
 
 
 if __name__ == '__main__':

@@ -296,7 +296,7 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="1.4142136"
-     inkscape:cx="605.58101"
+     inkscape:cx="479.0089"
      inkscape:cy="2886.0683"
      inkscape:document-units="px"
      inkscape:current-layer="layer10"
@@ -317,7 +317,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
         <cc:license
            rdf:resource="http://creativecommons.org/licenses/by-sa/4.0/" />
       </cc:Work>
@@ -529,5 +529,27 @@
          id="tspan1004-8-6-8"
          x="-362.48047"
          y="710.78076">IN3</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.33333397px;line-height:125%;font-family:'DejaVu Sans Mono';-inkscape-font-specification:'DejaVu Sans Mono, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       x="-265.00391"
+       y="683.05261"
+       id="text1006-4-8-5-5"
+       transform="rotate(-90)"><tspan
+         sodipodi:role="line"
+         id="tspan1004-8-6-8-1"
+         x="-265.00391"
+         y="683.05261">N3</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.33333397px;line-height:125%;font-family:'DejaVu Sans Mono';-inkscape-font-specification:'DejaVu Sans Mono, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       x="-266.04251"
+       y="627.89825"
+       id="text1006-4-8-5-5-5"
+       transform="rotate(-90)"><tspan
+         sodipodi:role="line"
+         id="tspan1004-8-6-8-1-1"
+         x="-266.04251"
+         y="627.89825">N2</tspan></text>
   </g>
 </svg>

@@ -1,6 +1,10 @@
-# v0.8RC1 (15 Apr 2018)
+# v0.8 (22 Apr 2018)
 * Adds signal booster, pin inputs and pin i/o gates and schematic symbols. NOT TESTED.
 * Adds --output and --input options, so that you can output the results of an SVG analysis as JSON, and input the results on later runs to save time. This is useful when you're working on the code for recognizing more gates, and don't need to re-analyze the drawing because it hasn't changed.
+* Adds OR gates, schematic output up to 6-OR.
+* Adds schematic output up to 3-NAND.
+* Adds truth tables to LUTs up to 10-LUT, and puts table in schematic (in component details) up to 7-LUT.
+* numpy is now required, for truth table input permutation. Although this feature isn't yet used.
 
 # v0.7 (14 Apr 2018)
 * Adds 5-NOR and 6-NOR schematic symbols.
